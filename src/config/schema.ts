@@ -36,12 +36,16 @@ const filtersSchema = z.object({
 })
 
 /**
- * Rate limits. hh's ceiling is 200 per ROLLING 24h across all resumes (§5.1);
- * these defaults sit far below it deliberately (§5.2).
+ * Rate limits. hh's own ceiling is 200 per ROLLING 24h across all resumes (§5.1),
+ * and the defaults here sit far below it deliberately (§5.2).
+ *
+ * No upper bound is enforced: this is a personal tool and the account owner decides
+ * their own risk. Values above the safe band are warned about at runtime (see
+ * `limitWarnings`), never rejected.
  */
 const limitsSchema = z.object({
-  perDay: z.number().int().min(1).max(200).default(30),
-  perHour: z.number().int().min(1).max(50).default(5),
+  perDay: z.number().int().min(1).default(30),
+  perHour: z.number().int().min(1).default(5),
   /** Base pause between actions, milliseconds. */
   delayMs: z.number().int().min(200).default(800),
   /** Random +/- jitter applied to every pause. */
@@ -122,3 +126,38 @@ export const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>
 export type SearchConfig = z.infer<typeof searchSchema>
 export type LimitsConfig = z.infer<typeof limitsSchema>
+
+/** hh's hard ceiling, for comparison only — not enforced. */
+export const HH_DAILY_CEILING = 200
+
+/**
+ * Advisory warnings for a configuration that raises the risk of a block.
+ * Returns an empty list for the safe defaults.
+ */
+export function limitWarnings(cfg: Config): string[] {
+  const w: string[] = []
+  const { perDay, perHour, delayMs, delayJitterMs } = cfg.limits
+
+  if (perDay > HH_DAILY_CEILING) {
+    w.push(
+      `limits.perDay=${perDay} exceeds hh's own ceiling of ${HH_DAILY_CEILING} per rolling 24h — ` +
+        'the surplus cannot be sent and will come back as limit_exceeded.',
+    )
+  } else if (perDay > 50) {
+    w.push(`limits.perDay=${perDay} is well above the researched safe band (~30/day).`)
+  }
+
+  if (perHour > 20) {
+    w.push(`limits.perHour=${perHour} is a burst rate no human matches (~5/hour is the safe band).`)
+  }
+  if (perHour > perDay) {
+    w.push(`limits.perHour=${perHour} is above limits.perDay=${perDay} — the daily cap binds first.`)
+  }
+  if (delayMs - delayJitterMs < 300) {
+    w.push(`limits.delayMs=${delayMs} ±${delayJitterMs} can produce sub-300ms pauses — an obvious bot signature.`)
+  }
+  if (!cfg.letter.requireManualApproval && cfg.llm.provider === 'none') {
+    w.push('letter.requireManualApproval=false with no LLM configured — letters would be empty.')
+  }
+  return w
+}

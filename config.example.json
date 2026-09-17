@@ -16,15 +16,15 @@
 
   "filters": {
     "skipWithTest": true,
-    "companyBlacklist": ["Аутстафф", "Кадровое агентство"],
-    "titleBlacklist": ["стажер", "стажёр", "Junior", "1С"],
+    "companyBlacklist": [],
+    "titleBlacklist": ["стажер", "стажёр", "trainee", "1С"],
     "allowNoSalary": true
   },
 
   "limits": {
-    "perDay": 30,
-    "perHour": 5,
-    "delayMs": 800,
+    "perDay": 100,
+    "perHour": 100,
+    "delayMs": 5000,
     "delayJitterMs": 400,
     "readPauseMsMin": 1500,
     "readPauseMsMax": 4000

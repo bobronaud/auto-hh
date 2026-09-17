@@ -1,4 +1,5 @@
 import { loadConfig, configSource } from './config/load.js'
+import { limitWarnings } from './config/schema.js'
 import { login, health } from './hh/auth.js'
 import { probe } from './hh/probe.js'
 import { getDb, closeDb } from './db/index.js'
@@ -44,6 +45,8 @@ async function doctor(): Promise<void> {
   console.log(`limits      ${cfg.limits.perDay}/day, ${cfg.limits.perHour}/hour (hh ceiling: 200 per rolling 24h)`)
   console.log(`letter cap  ${cfg.letter.maxChars} chars ${cfg.letter.requireManualApproval ? '(manual approval on)' : '(NO manual approval)'}`)
   console.log(`llm         ${isConfigured(cfg) ? `${cfg.llm.provider} / ${cfg.llm.model}` : 'none — scoring and letters are not wired yet'}`)
+
+  for (const w of limitWarnings(cfg)) console.log(`\n  ⚠ ${w}`)
 
   getDb()
   const repo = new Repo()

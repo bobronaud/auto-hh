@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from 'playwright'
 import { HH_BASE, openContext, getPage, detectState, screenshot } from './browser.js'
 import { logger } from '../core/logger.js'
-import type { Config } from '../config/schema.js'
+import { limitWarnings, type Config } from '../config/schema.js'
 
 const log = logger('auth')
 
@@ -17,6 +17,8 @@ export async function login(cfg: Config): Promise<void> {
   if (cfg.browser.headless) {
     throw new Error('Cannot log in headless — a human has to type the code and pass the captcha.')
   }
+
+  for (const w of limitWarnings(cfg)) log.warn(w)
 
   const ctx = await openContext({ ...cfg, browser: { ...cfg.browser, headless: false } })
   const page = await getPage(ctx)
