@@ -24,10 +24,14 @@ export interface LetterTarget {
 /**
  * The system prompt carries the rules; the user prompt carries the data.
  *
- * Two constraints do real work here. "Invent nothing" is the important one: a letter
- * claiming experience the resume does not list is worse than no letter at all — it is
- * read by a person who will ask about it. The length cap is the other: hh rejects
- * over-long letters outright (too_long_message).
+ * The grounding rule is aimed at fabricated *specifics* — metrics, durations, company
+ * names, job titles — because those are checkable and a person will ask about them.
+ * It is deliberately NOT a ban on everything absent from the file: a resume is an
+ * edited document, and its author may well know more than it lists. The resume file is
+ * the pool of material to draw on, not an exhaustive account of the candidate.
+ *
+ * The length cap is the other real constraint: hh rejects over-long letters outright
+ * (too_long_message).
  */
 export function systemPrompt(cfg: Config): string {
   const lang = cfg.letter.language === 'ru' ? 'русском' : 'английском'
@@ -36,7 +40,8 @@ export function systemPrompt(cfg: Config): string {
     '',
     'Жёсткие правила:',
     `— Не более ${cfg.letter.maxChars} символов в каждом письме, цель — ${Math.round(cfg.letter.maxChars * 0.4)}.`,
-    '— НИКОГДА не приписывай кандидату опыт, которого нет в резюме. Ни технологий, ни лет, ни компаний.',
+    '— Не выдумывай проверяемых фактов: цифр, метрик, сроков, названий компаний и должностей.',
+    '  Любая конкретика в письме должна браться из резюме дословно или близко к тексту.',
     '— Опирайся на 1-2 конкретные детали вакансии: стек, продукт, задачу. Общие фразы не нужны.',
     '— Без markdown, без заголовков, без списков. Только текст письма.',
     '— Не выдумывай имя кандидата и не подписывайся именем.',
