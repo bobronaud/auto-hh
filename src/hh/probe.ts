@@ -35,6 +35,19 @@ interface GroupResult {
   status: 'ok' | 'missing'
 }
 
+/** First candidate that actually resolves, as a Locator ready to click. */
+async function firstLocator(page: Page, candidates: readonly string[]) {
+  for (const sel of candidates) {
+    try {
+      const loc = page.locator(sel).first()
+      if ((await loc.count()) > 0) return loc
+    } catch {
+      // A bad candidate must not abort the scan.
+    }
+  }
+  return null
+}
+
 async function probeGroup(
   page: Page,
   group: string,
@@ -72,6 +85,26 @@ async function probeSection(
   return out
 }
 
+/**
+ * Save the real outerHTML of a node. Guessing attributes from a screenshot only
+ * goes so far — hh's markup is the ground truth, and a missing selector is almost
+ * always a wrong attribute name rather than a missing element.
+ */
+async function dump(page: Page, name: string, selector: string): Promise<string | null> {
+  try {
+    const loc = page.locator(selector).first()
+    if ((await loc.count()) === 0) return null
+    const html = await loc.evaluate((el) => el.outerHTML)
+    const path = resolve(PROBE_DIR, `${name}.html`)
+    writeFileSync(path, html, 'utf8')
+    log.info(`dumped ${name} (${html.length} bytes)`)
+    return path
+  } catch (e) {
+    log.debug(`dump ${name} failed: ${(e as Error).message}`)
+    return null
+  }
+}
+
 export async function probe(cfg: Config): Promise<void> {
   const ctx = await openContext({ ...cfg, browser: { ...cfg.browser, headless: false } })
   const page = await getPage(ctx)
@@ -98,6 +131,8 @@ export async function probe(cfg: Config): Promise<void> {
     await page.waitForTimeout(2000)
     results.push(...(await probeSection(page, 'search', selectors.search)))
     await screenshot(page, 'probe-search')
+    await dump(page, 'search-card', selectors.search.card[0]!)
+    await dump(page, 'search-pager', '[data-qa*="pager"], nav[aria-label*="страниц"], .pager')
 
     // Does the card expose has_test at all? Decides whether we can filter tests
     // for free or must open every vacancy page to find out (§3.2).
@@ -132,18 +167,36 @@ export async function probe(cfg: Config): Promise<void> {
         await page.waitForTimeout(3000)
         results.push(...(await probeSection(page, 'apply', selectors.apply)))
         await screenshot(page, 'probe-apply-modal')
+        await dump(page, 'apply-modal-before', selectors.apply.modal[1]!)
+
+        // The letter field does not exist until the toggle is pressed — probing for
+        // it before this click can only ever report "missing".
+        const toggle = await firstLocator(page, selectors.apply.letterToggle)
+        if (toggle) {
+          log.warn('Clicking "Добавить сопроводительное". Still nothing is submitted.')
+          await toggle.click().catch(() => {})
+          await page.waitForTimeout(1500)
+          for (const r of await probeSection(page, 'apply', selectors.apply)) {
+            const prev = results.find((x) => x.group === 'apply' && x.key === r.key)
+            if (prev && prev.status === 'missing' && r.status === 'ok') Object.assign(prev, r)
+          }
+          await screenshot(page, 'probe-apply-letter')
+          await dump(page, 'apply-modal-after', selectors.apply.modal[1]!)
+        } else {
+          notes.push('Cover-letter toggle not found — letter field cannot be revealed.')
+        }
 
         // Stage 0.4: the letter length cap is undocumented — read it off the DOM.
-        const ta = page.locator(selectors.apply.letterTextarea[0]!).first()
-        if ((await ta.count()) > 0) {
+        const ta = await firstLocator(page, selectors.apply.letterTextarea)
+        if (ta) {
           const maxlength = await ta.getAttribute('maxlength').catch(() => null)
           notes.push(
             maxlength
-              ? `Letter textarea maxlength = ${maxlength} — set letter.maxChars below this.`
+              ? `Letter textarea maxlength = ${maxlength} — set letter.maxChars at or below this.`
               : 'Letter textarea has no maxlength attribute — measure the cap by hand (stage 0.4).',
           )
         } else {
-          notes.push('Letter textarea not found — it may appear only after a "cover letter" toggle.')
+          notes.push('Letter textarea still not found after the toggle — see apply-modal-after.html.')
         }
       } else {
         notes.push('Apply button not found on this vacancy (already applied? archived? external apply?).')

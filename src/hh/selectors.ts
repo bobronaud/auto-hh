@@ -103,16 +103,38 @@ export const selectors = {
     hasTestBadge: ['[data-qa="vacancy-response-link-top-with-test"]', 'text=/с тестовым заданием/i'],
   },
 
-  /** Модалка отклика: выбор резюме, письмо, отправка. */
+  /**
+   * Модалка отклика. Подтверждённая probe механика:
+   *   открыть модалку → выбрать резюме в кастомном дропдауне (не <select>)
+   *   → нажать «Добавить сопроводительное» → поле письма ПОЯВЛЯЕТСЯ в DOM
+   *   → ввести текст → «Откликнуться»
+   * Поле письма отсутствует до нажатия тоггла — искать его раньше бессмысленно.
+   */
   apply: {
     modal: ['[data-qa="vacancy-response-popup"]', 'div[role="dialog"]'],
-    resumeSelect: ['[data-qa="resume-select"]', 'select[data-qa*="resume"]'],
-    resumeOption: ['[data-qa="resume-select-option"]'],
-    letterToggle: ['[data-qa="vacancy-response-letter-toggle"]'],
+    /** Кастомный дропдаун, не select. Клик раскрывает список резюме. */
+    resumeSelect: [
+      '[data-qa="resume-select"]',
+      '[data-qa="vacancy-response-popup-resume-select"]',
+      'div[role="dialog"] [role="combobox"]',
+      'div[role="dialog"] button:has(img)',
+    ],
+    resumeOption: [
+      '[data-qa="resume-select-option"]',
+      '[role="option"]',
+      'div[role="dialog"] [role="listbox"] li',
+    ],
+    /** Раскрывает поле письма. Текст — самый надёжный якорь до уточнения data-qa. */
+    letterToggle: [
+      '[data-qa="vacancy-response-letter-toggle"]',
+      'button:has-text("Добавить сопроводительное")',
+      'text=Добавить сопроводительное',
+    ],
     letterTextarea: [
       '[data-qa="vacancy-response-popup-form-letter-input"]',
       'textarea[data-qa*="letter"]',
       'textarea[name="letter"]',
+      'div[role="dialog"] textarea',
     ],
     submitButton: [
       '[data-qa="vacancy-response-submit-popup"]',
