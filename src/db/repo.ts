@@ -12,6 +12,7 @@ export interface VacancyInput {
   salaryCurrency?: string | null
   hasTest?: boolean | null
   responseLetterRequired?: boolean | null
+  canApplyFromList?: boolean | null
   archived?: boolean
   snippet?: string | null
   raw?: unknown
@@ -29,6 +30,7 @@ export interface VacancyRow {
   salary_currency: string | null
   has_test: number | null
   response_letter_required: number | null
+  can_apply_from_list: number | null
   archived: number
   snippet: string | null
   description: string | null
@@ -86,10 +88,10 @@ export class Repo {
     const stmt = this.db.prepare(`
       INSERT INTO vacancies (hh_id, title, company, url, area, salary_from, salary_to,
                              salary_currency, has_test, response_letter_required,
-                             archived, snippet, raw_json, found_at)
+                             can_apply_from_list, archived, snippet, raw_json, found_at)
       VALUES (@hh_id, @title, @company, @url, @area, @salary_from, @salary_to,
               @salary_currency, @has_test, @response_letter_required,
-              @archived, @snippet, @raw_json, @found_at)
+              @can_apply_from_list, @archived, @snippet, @raw_json, @found_at)
       ON CONFLICT (hh_id) DO UPDATE SET
         title    = excluded.title,
         company  = COALESCE(excluded.company, vacancies.company),
@@ -101,6 +103,9 @@ export class Repo {
         has_test                 = COALESCE(excluded.has_test, vacancies.has_test),
         response_letter_required = COALESCE(excluded.response_letter_required,
                                             vacancies.response_letter_required),
+        -- Fresh scrape wins here: the button appearing or disappearing is news.
+        can_apply_from_list = COALESCE(excluded.can_apply_from_list,
+                                       vacancies.can_apply_from_list),
         archived = excluded.archived,
         snippet  = COALESCE(excluded.snippet, vacancies.snippet)
       RETURNING id
@@ -116,6 +121,7 @@ export class Repo {
       salary_currency: v.salaryCurrency ?? null,
       has_test: bool(v.hasTest),
       response_letter_required: bool(v.responseLetterRequired),
+      can_apply_from_list: bool(v.canApplyFromList),
       archived: v.archived ? 1 : 0,
       snippet: v.snippet ?? null,
       raw_json: v.raw ? JSON.stringify(v.raw) : null,
@@ -183,7 +189,12 @@ export class Repo {
         `SELECT v.* FROM vacancies v
          WHERE v.archived = 0
            AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
-         ORDER BY v.found_at DESC
+         ORDER BY
+           -- Cards that still offer an apply button first: a missing button usually
+           -- means we already answered this one, and finding that out costs a full
+           -- navigation. NULL (unknown) sorts with the applyable ones, not last.
+           CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,
+           CAST(v.hh_id AS INTEGER) DESC
          LIMIT ?`,
       )
       .all(limit) as VacancyRow[]

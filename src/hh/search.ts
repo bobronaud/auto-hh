@@ -89,7 +89,11 @@ async function scrapePage(page: Page): Promise<ScrapedCard[]> {
         salary: (salary?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
         hasTest: el.querySelector(s.test) !== null,
         canApplyFromList: el.querySelector(s.apply) !== null,
-        alreadyApplied: /Вы\s+откликнулись/i.test(el.textContent ?? ''),
+        // hh words this differently depending on what happened to the application:
+        // "Вы откликнулись" for a pending one, a rejection notice for a refused one.
+        alreadyApplied: /Вы\s+откликнулись|Отказ|Вам\s+отказали|Приглашение/i.test(
+          el.textContent ?? '',
+        ),
       }
     })
   }, sel)

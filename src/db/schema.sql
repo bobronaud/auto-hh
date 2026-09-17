@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS vacancies (
   has_test                 INTEGER,
   response_letter_required INTEGER,
   archived                 INTEGER NOT NULL DEFAULT 0,
+  -- Была ли в карточке выдачи кнопка «Откликнуться». Её отсутствие — сильный
+  -- признак, что откликнуться нельзя: уже откликались, отказ, архив, внешний сайт.
+  -- Не приговор (вёрстка может меняться), поэтому такие вакансии не отбрасываются,
+  -- а уходят в конец очереди.
+  can_apply_from_list      INTEGER,
   snippet                  TEXT,
   description              TEXT,
   raw_json                 TEXT,
