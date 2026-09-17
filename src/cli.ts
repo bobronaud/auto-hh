@@ -39,6 +39,21 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'failures':
+      failures()
+      break
+
+    case 'requeue': {
+      const code = process.argv[3]
+      const n = new Repo().requeueFailed(code)
+      console.log(
+        n === 0
+          ? 'Nothing to requeue.'
+          : `${n} vacancies are back in the queue${code ? ` (${code})` : ''}. Fix the cause before rerunning.`,
+      )
+      break
+    }
+
     case 'review':
       review()
       break
@@ -61,10 +76,44 @@ head-hunter-hunter
   npm run collect          Scrape the search results, filter and route. Sends nothing.
   npm run apply -- <n>     Answer up to n stored vacancies (dry run unless dryRun=false).
   npm run review           List vacancies parked for manual handling.
+  npm run failures         List applications that did not go through, with causes.
+  npm run requeue -- <code>  Put failed vacancies back in the queue after a fix.
   npm run resolve -- <id>  Mark one parked vacancy as handled.
 `)
       process.exitCode = command ? 1 : 0
   }
+}
+
+/**
+ * Applications that did not go through, newest first, grouped by cause.
+ *
+ * The breakdown matters more than the list: twenty failures sharing one error code
+ * mean one broken selector, not twenty broken vacancies.
+ */
+function failures(): void {
+  const repo = new Repo()
+  const rows = repo.failedApplications()
+  if (rows.length === 0) {
+    console.log('\nNo failed applications.\n')
+    return
+  }
+
+  console.log(`\n${rows.length} failed applications\n`)
+  console.log('  by cause:')
+  for (const { error_code, n } of repo.failureBreakdown()) {
+    console.log(`    ${String(n).padStart(4)}  ${error_code}`)
+  }
+
+  console.log('\n  most recent:')
+  for (const r of rows.slice(0, 20)) {
+    console.log(`\n  #${r.application_id}  ${r.title}`)
+    console.log(`      ${r.company ?? '—'} · ${r.error_code ?? 'unknown'} · ${r.created_at.slice(0, 16).replace('T', ' ')}`)
+    if (r.error_message) console.log(`      ${r.error_message}`)
+    console.log(`      ${r.url}`)
+    if (r.screenshot_path) console.log(`      ${r.screenshot_path}`)
+  }
+
+  console.log(`\n  Fixed the cause? npm run requeue -- <error_code>   (or with no code, all of them)\n`)
 }
 
 /**
@@ -111,6 +160,8 @@ async function doctor(): Promise<void> {
   console.log(`pending     ${repo.countPending()} vacancies waiting to be answered`)
   const parked = repo.countNeedsHuman()
   if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
+  const failed = repo.countFailed()
+  if (failed > 0) console.log(`failed      ${failed} applications did not go through — npm run failures`)
 
   const hasProfile = existsSync(BROWSER_PROFILE_DIR) && readdirSync(BROWSER_PROFILE_DIR).length > 0
   console.log(`profile     ${hasProfile ? BROWSER_PROFILE_DIR : 'missing — run `npm run login`'}`)

@@ -44,6 +44,19 @@ export type ApplicationStatus =
   | 'dry_run'
   | 'needs_human'
 
+export interface FailedRow {
+  application_id: number
+  vacancy_id: number
+  hh_id: string
+  title: string
+  company: string | null
+  url: string
+  error_code: string | null
+  error_message: string | null
+  screenshot_path: string | null
+  created_at: string
+}
+
 export interface NeedsHumanRow {
   application_id: number
   vacancy_id: number
@@ -333,6 +346,59 @@ export class Repo {
         now(),
       ) as { id: number }
     return row.id
+  }
+
+  // ---------------------------------------------------------------- failures
+
+  /**
+   * Applications that did not go through. Kept in full — error code, message and
+   * screenshot — because the usual cause is a stale selector, and a failure without
+   * its screenshot is not diagnosable after the fact.
+   */
+  failedApplications(limit = 200): FailedRow[] {
+    return this.db
+      .prepare(
+        `SELECT a.id AS application_id, v.id AS vacancy_id, v.hh_id, v.title, v.company,
+                v.url, a.error_code, a.error_message, a.screenshot_path, a.created_at
+         FROM applications a
+         JOIN vacancies v ON v.id = a.vacancy_id
+         WHERE a.status = 'failed'
+         ORDER BY a.created_at DESC
+         LIMIT ?`,
+      )
+      .all(limit) as FailedRow[]
+  }
+
+  /** Failure counts by cause — which selector broke, and how widely. */
+  failureBreakdown(): Array<{ error_code: string; n: number }> {
+    return this.db
+      .prepare(
+        `SELECT COALESCE(error_code, 'unknown') AS error_code, COUNT(*) AS n
+         FROM applications WHERE status = 'failed'
+         GROUP BY error_code ORDER BY n DESC`,
+      )
+      .all() as Array<{ error_code: string; n: number }>
+  }
+
+  countFailed(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM applications WHERE status = 'failed'`)
+      .get() as { n: number }
+    return row.n
+  }
+
+  /**
+   * Put failed vacancies back in the queue by dropping their failure records.
+   *
+   * Explicitly manual: automatic retries against hh are what turns a broken selector
+   * into a blocked account. This is for after the cause has been fixed.
+   */
+  requeueFailed(errorCode?: string): number {
+    const stmt = errorCode
+      ? this.db.prepare(`DELETE FROM applications WHERE status = 'failed' AND error_code = ?`)
+      : this.db.prepare(`DELETE FROM applications WHERE status = 'failed'`)
+    const info = errorCode ? stmt.run(errorCode) : stmt.run()
+    return info.changes
   }
 
   // ------------------------------------------------------------- needs human
