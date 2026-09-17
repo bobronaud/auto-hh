@@ -36,37 +36,22 @@
     "minScore": 1
   },
   "search": {
-    "text": "React OR Vue OR TypeScript OR Frontend",
+    "text": "frontend OR фронтенд OR react OR vue OR angular OR javascript OR typescript OR верстальщик",
     "searchField": [
       "name"
     ],
     "area": [
       "113"
     ],
-    "experience": "between3And6",
-    "excludedText": [
-      "1С",
-      "Битрикс",
-      "PHP",
-      "стажёр"
-    ],
-    "workFormat": [
-      "REMOTE",
-      "HYBRID"
-    ],
-    "period": 7,
-    "maxPages": 5
+    "excludedText": [],
+    "workFormat": [],
+    "period": 30,
+    "maxPages": 20
   },
   "filters": {
-    "skipWithTest": true,
+    "skipWithTest": false,
     "companyBlacklist": [],
-    "titleBlacklist": [
-      "стажер",
-      "стажёр",
-      "trainee",
-      "1С"
-    ],
-    "allowNoSalary": true
+    "titleBlacklist": []
   },
   "limits": {
     "perDay": 100,
@@ -85,15 +70,25 @@
     "threshold": 65,
     "requiredKeywordHits": 1,
     "keywords": [
+      "frontend",
+      "front-end",
+      "front end",
+      "фронтенд",
+      "фронт",
       "react",
       "vue",
-      "nuxt",
+      "angular",
+      "svelte",
       "next",
-      "typescript",
+      "nuxt",
       "javascript",
-      "frontend",
-      "redux",
-      "pinia"
+      "typescript",
+      "js",
+      "ts",
+      "верстальщик",
+      "вёрстка",
+      "верстка",
+      "ui"
     ]
   },
   "letter": {

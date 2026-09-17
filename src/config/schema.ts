@@ -23,16 +23,24 @@ const searchSchema = z.object({
   maxPages: z.number().int().min(1).max(40).default(5),
 })
 
-/** Hard filters applied locally before any LLM call (§3.2). */
+/**
+ * Hard filters applied locally before any LLM call (§3.2).
+ *
+ * Deliberately minimal. The goal of this tool is coverage, so the only question a
+ * filter may ask is "is this a frontend vacancy at all". Salary, years of experience
+ * and work format are NOT filtered: narrowing on them throws away applications for
+ * criteria that are negotiable anyway.
+ */
 const filtersSchema = z.object({
-  skipWithTest: z.boolean().default(true),
+  /**
+   * Vacancies with a test task cannot be answered automatically. false parks them in
+   * the manual queue (npm run review); true drops them silently.
+   */
+  skipWithTest: z.boolean().default(false),
   /** Substrings in company name that disqualify (agencies, known spammers). */
   companyBlacklist: z.array(z.string()).default([]),
   /** Substrings in vacancy title that disqualify. */
   titleBlacklist: z.array(z.string()).default([]),
-  minSalary: z.number().int().nonnegative().optional(),
-  /** Keep vacancies with no salary stated. */
-  allowNoSalary: z.boolean().default(true),
 })
 
 /**

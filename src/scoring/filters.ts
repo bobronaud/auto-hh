@@ -1,5 +1,6 @@
 import type { Config } from '../config/schema.js'
 import type { ScrapedCard } from '../hh/search.js'
+import { countMatchingWords } from './textMatch.js'
 
 /**
  * Cheap local filters, applied before anything expensive (RESEARCH §3.2).
@@ -13,16 +14,14 @@ export type DropReason =
   | 'has_test'
   | 'company_blacklist'
   | 'title_blacklist'
-  | 'salary_below_min'
-  | 'no_keyword_hit'
+  | 'not_frontend'
 
 export const DROP_LABEL: Record<DropReason, string> = {
   already_applied: 'уже откликались',
   has_test: 'тестовое задание',
   company_blacklist: 'компания в чёрном списке',
   title_blacklist: 'стоп-слово в названии',
-  salary_below_min: 'зарплата ниже минимума',
-  no_keyword_hit: 'нет совпадений по стеку',
+  not_frontend: 'не фронтенд',
 }
 
 export interface FilterVerdict {
@@ -58,20 +57,13 @@ export function filterCard(
     return { keep: false, reason: 'title_blacklist' }
   }
 
-  if (cfg.filters.minSalary !== undefined) {
-    const stated = card.salaryFrom ?? card.salaryTo ?? null
-    if (stated === null) {
-      if (!cfg.filters.allowNoSalary) return { keep: false, reason: 'salary_below_min' }
-    } else if (stated < cfg.filters.minSalary) {
-      return { keep: false, reason: 'salary_below_min' }
-    }
-  }
-
-  // Keyword prefilter over the title only: the card carries no description, and
-  // guessing from a company name would drop good vacancies.
+  // The only substantive question: is this frontend at all? Matched against the
+  // title, which is all a search card carries. Everything else — salary, years,
+  // remote or office — is left alone on purpose: filtering on it costs applications
+  // for criteria that are negotiable anyway.
   if (cfg.scoring.requiredKeywordHits > 0 && cfg.scoring.keywords.length > 0) {
-    const hits = cfg.scoring.keywords.filter((k) => title.includes(lc(k))).length
-    if (hits < cfg.scoring.requiredKeywordHits) return { keep: false, reason: 'no_keyword_hit' }
+    const hits = countMatchingWords(card.title, cfg.scoring.keywords)
+    if (hits < cfg.scoring.requiredKeywordHits) return { keep: false, reason: 'not_frontend' }
   }
 
   return { keep: true }

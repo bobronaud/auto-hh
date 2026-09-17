@@ -1,4 +1,5 @@
 import type { Config, ResumeConfig } from '../config/schema.js'
+import { countWordHits } from './textMatch.js'
 
 /**
  * Pick which resume answers a vacancy (React vs Vue).
@@ -30,15 +31,6 @@ export interface RouteResult {
   usedFallback: boolean
 }
 
-/** Whole-word-ish match so "vue" does not fire inside "value" or "revue". */
-function countHits(haystack: string, needle: string): number {
-  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Cyrillic and Latin letters are both "word" characters here; digits and + stay
-  // attached so "vue3" and "c++" behave.
-  const re = new RegExp(`(?<![\\p{L}\\d])${escaped}(?![\\p{L}\\d])`, 'giu')
-  return (haystack.match(re) ?? []).length
-}
-
 function scoreResume(
   resume: ResumeConfig,
   title: string,
@@ -46,12 +38,12 @@ function scoreResume(
   titleWeight: number,
 ): number {
   for (const bad of resume.exclude) {
-    if (countHits(title, bad) > 0 || countHits(body, bad) > 0) return 0
+    if (countWordHits(title, bad) > 0 || countWordHits(body, bad) > 0) return 0
   }
   let score = 0
   for (const m of resume.match) {
-    score += countHits(title, m) * titleWeight
-    score += countHits(body, m)
+    score += countWordHits(title, m) * titleWeight
+    score += countWordHits(body, m)
   }
   return score
 }
