@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "review": "tsx src/cli.ts review",
     "resolve": "tsx src/cli.ts resolve",
-    "collect": "tsx src/cli.ts collect"
+    "collect": "tsx src/cli.ts collect",
+    "apply": "tsx src/cli.ts apply"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

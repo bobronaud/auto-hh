@@ -155,6 +155,39 @@ export class Repo {
     return new Set(rows.map((r) => r.hh_id))
   }
 
+  /**
+   * Vacancies that have not been answered or ruled out yet, newest first.
+   *
+   * Excludes anything with an application of any kind — 'applied' obviously, but also
+   * 'needs_human' (it is waiting for the human, not for another attempt), 'skipped'
+   * and 'failed'. A failed vacancy is deliberately not retried automatically: the
+   * usual cause is a stale selector, and retrying in a loop against hh is precisely
+   * the behaviour that gets an account blocked.
+   */
+  pendingVacancies(limit = 50): VacancyRow[] {
+    return this.db
+      .prepare(
+        `SELECT v.* FROM vacancies v
+         WHERE v.archived = 0
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+         ORDER BY v.found_at DESC
+         LIMIT ?`,
+      )
+      .all(limit) as VacancyRow[]
+  }
+
+  /** How many vacancies are waiting to be answered. */
+  countPending(): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM vacancies v
+         WHERE v.archived = 0
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)`,
+      )
+      .get() as { n: number }
+    return row.n
+  }
+
   // -------------------------------------------------------------- rate limits
 
   /**

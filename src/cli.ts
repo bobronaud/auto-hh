@@ -31,6 +31,14 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'apply': {
+      const cfg = loadConfig()
+      const n = process.argv[3] ? Number(process.argv[3]) : undefined
+      const { runApplications, printRunResult } = await import('./pipeline/apply.js')
+      printRunResult(await runApplications(cfg, n))
+      break
+    }
+
     case 'review':
       review()
       break
@@ -51,6 +59,7 @@ head-hunter-hunter
   npm run doctor           Check config, database, session — without touching hh.
   npm run selectors:probe  Verify every selector against live hh.ru (research stage 0).
   npm run collect          Scrape the search results, filter and route. Sends nothing.
+  npm run apply -- <n>     Answer up to n stored vacancies (dry run unless dryRun=false).
   npm run review           List vacancies parked for manual handling.
   npm run resolve -- <id>  Mark one parked vacancy as handled.
 `)
@@ -99,6 +108,7 @@ async function doctor(): Promise<void> {
   const repo = new Repo()
   console.log(`\ndatabase    ok`)
   console.log(`applied     ${repo.countAppliedWithin(24)} in the last rolling 24h, ${repo.countAppliedWithin(1)} in the last hour`)
+  console.log(`pending     ${repo.countPending()} vacancies waiting to be answered`)
   const parked = repo.countNeedsHuman()
   if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
 
