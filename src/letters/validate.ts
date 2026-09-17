@@ -39,8 +39,13 @@ const PLACEHOLDER = /\[(?:имя|название|компан|вакан|ваш
 const META =
   /как (?:языковая )?модель|как (?:ии|ai)|я не могу|вот (?:письмо|текст|вариант)|конечно[,!]|надеюсь, это подойд/i
 
-/** Markdown that would be shown literally in hh's plain-text field. */
-const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\w|```)/m
+/**
+ * Markdown that would be shown literally in hh's plain-text field.
+ *
+ * \p{L} rather than \w: the latter is ASCII-only in JS, so a bullet list in Russian
+ * ("- Опыт работы") sailed straight past this check.
+ */
+const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
 
 export function validateLetter(text: string, cfg: Config): Validation {
   const problems: LetterProblem[] = []

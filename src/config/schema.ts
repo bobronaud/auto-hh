@@ -94,6 +94,28 @@ const letterSchema = z.object({
   requireManualApproval: z.boolean().default(true),
   language: z.enum(['ru', 'en']).default('ru'),
   /**
+   * Salary to name when a vacancy asks for expectations, by the grade it targets.
+   * Detection is in scoring/grade.ts; an unstated grade is treated as middle.
+   */
+  salaryByGrade: z
+    .object({
+      junior: z.number().int().positive(),
+      middle: z.number().int().positive(),
+      senior: z.number().int().positive(),
+    })
+    .default({ junior: 150_000, middle: 200_000, senior: 250_000 }),
+  /**
+   * What to say when a vacancy asks for GitHub or a portfolio and there is nothing to
+   * link. Answering plainly beats ignoring the request — an employer who asked and got
+   * silence reads that as the posting not being read.
+   */
+  noLinksExcuse: z
+    .string()
+    .default(
+      'GitHub пустой, пет-проекты не веду — всё рабочее время уходит на коммерческие задачи, ' +
+        'код закрыт NDA. Готов разобрать любой свой проект на созвоне или выполнить тестовое.',
+    ),
+  /**
    * Letters generated per LLM call.
    *
    * This matters far more than the model choice. Every claude-cli invocation re-sends

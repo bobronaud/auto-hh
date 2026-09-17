@@ -1,7 +1,15 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createProvider, type LlmProvider } from '../llm/provider.js'
-import { systemPrompt, batchPrompt, PROMPT_VERSION, type LetterTarget } from './prompt.js'
+import {
+  systemPrompt,
+  batchPrompt,
+  PROMPT_VERSION,
+  type LetterTarget,
+  type TargetHints,
+} from './prompt.js'
+import { detectGrade } from '../scoring/grade.js'
+import { detectRequirements } from './requirements.js'
 import { validateLetter, tidyLetter, PROBLEM_LABEL } from './validate.js'
 import { ROOT } from '../core/paths.js'
 import { logger } from '../core/logger.js'
@@ -50,9 +58,11 @@ export async function generateLetters(
   if (targets.length === 0) return []
 
   const resumeText = readResumeText(resume)
+  const hints = buildHints(targets, cfg)
+
   const result = await provider.complete({
     system: systemPrompt(cfg),
-    prompt: batchPrompt(targets, resume, resumeText, cfg),
+    prompt: batchPrompt(targets, resume, resumeText, cfg, hints),
   })
 
   const parsed = parseBatch(result.text, targets.length)
@@ -69,6 +79,34 @@ export async function generateLetters(
     }
     return { index: t.index, text, ok: v.ok, problems: v.problems.map((p) => PROBLEM_LABEL[p]) }
   })
+}
+
+/**
+ * Decide, per vacancy, what the posting is asking the letter to contain.
+ *
+ * Kept per-vacancy rather than global: in a batch of ten only some postings ask for a
+ * salary, and a shared instruction would sprinkle one into every letter.
+ */
+function buildHints(
+  targets: readonly LetterTarget[],
+  cfg: Config,
+): Map<number, TargetHints> {
+  const hints = new Map<number, TargetHints>()
+
+  for (const t of targets) {
+    const req = detectRequirements(t.title, t.description)
+    if (!req.wantsSalary && !req.wantsLinks) continue
+
+    const hint: TargetHints = {}
+    if (req.wantsSalary) {
+      const verdict = detectGrade(t.title, t.description)
+      hint.salary = cfg.letter.salaryByGrade[verdict.grade]
+      log.debug(`#${t.index}: ${verdict.grade} (${verdict.reason}) → ${hint.salary}`)
+    }
+    if (req.wantsLinks) hint.explainNoLinks = true
+    hints.set(t.index, hint)
+  }
+  return hints
 }
 
 /**
