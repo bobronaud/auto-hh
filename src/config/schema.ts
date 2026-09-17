@@ -96,11 +96,14 @@ const letterSchema = z.object({
         'Когда удобно созвониться?',
     ),
   /**
-   * Hard character cap. hh returns too_long_message past its own limit (§4.2), but
-   * the exact number is NOT documented anywhere — measure it in the UI (recon 0.4)
-   * and set this below what you measure.
+   * Hard character cap.
+   *
+   * hh's own limit is 10000, read off the field's counter ("88 из 10000") during a
+   * dry run — it appears in no documentation and the textarea carries no maxlength
+   * attribute, which is why the research left it open. The default here is far lower
+   * on purpose: a 10000-character cover letter does not get read.
    */
-  maxChars: z.number().int().min(100).default(1800),
+  maxChars: z.number().int().min(100).max(10_000).default(1800),
   minChars: z.number().int().min(0).default(300),
   /** Never send a generated letter without a human seeing it first. */
   requireManualApproval: z.boolean().default(true),
