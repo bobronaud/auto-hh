@@ -36,6 +36,26 @@ export interface VacancyRow {
   detail_fetched_at: string | null
 }
 
+export type ApplicationStatus =
+  | 'planned'
+  | 'applied'
+  | 'skipped'
+  | 'failed'
+  | 'dry_run'
+  | 'needs_human'
+
+export interface NeedsHumanRow {
+  application_id: number
+  vacancy_id: number
+  hh_id: string
+  title: string
+  company: string | null
+  url: string
+  needs_human_reason: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 const now = () => new Date().toISOString()
 const bool = (v: boolean | null | undefined): number | null =>
   v === null || v === undefined ? null : v ? 1 : 0
@@ -254,16 +274,18 @@ export class Repo {
     vacancyId: number
     runId?: number | null
     letterId?: number | null
-    status: 'planned' | 'applied' | 'skipped' | 'failed' | 'dry_run'
+    status: ApplicationStatus
     errorCode?: string | null
     errorMessage?: string | null
     screenshotPath?: string | null
+    needsHumanReason?: string | null
   }): number {
     const row = this.db
       .prepare(
         `INSERT INTO applications (vacancy_id, run_id, letter_id, status, error_code,
-                                   error_message, screenshot_path, applied_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+                                   error_message, screenshot_path, needs_human_reason,
+                                   applied_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
       .get(
         a.vacancyId,
@@ -273,10 +295,45 @@ export class Repo {
         a.errorCode ?? null,
         a.errorMessage ?? null,
         a.screenshotPath ?? null,
+        a.needsHumanReason ?? null,
         a.status === 'applied' ? now() : null,
         now(),
       ) as { id: number }
     return row.id
+  }
+
+  // ------------------------------------------------------------- needs human
+
+  /**
+   * The manual-work queue: vacancies the bot deliberately refused to answer
+   * (employer questions, tests, external ATS). Ordered newest first; resolved ones
+   * drop out unless asked for.
+   */
+  needsHuman(opts: { includeResolved?: boolean; limit?: number } = {}): NeedsHumanRow[] {
+    const where = opts.includeResolved ? '' : 'AND a.resolved_at IS NULL'
+    return this.db
+      .prepare(
+        `SELECT a.id AS application_id, v.id AS vacancy_id, v.hh_id, v.title, v.company,
+                v.url, a.needs_human_reason, a.created_at, a.resolved_at
+         FROM applications a
+         JOIN vacancies v ON v.id = a.vacancy_id
+         WHERE a.status = 'needs_human' ${where}
+         ORDER BY a.created_at DESC
+         LIMIT ?`,
+      )
+      .all(opts.limit ?? 200) as NeedsHumanRow[]
+  }
+
+  /** Mark one as handled by hand, so it stops showing up in the queue. */
+  resolveNeedsHuman(applicationId: number): void {
+    this.db.prepare('UPDATE applications SET resolved_at = ? WHERE id = ?').run(now(), applicationId)
+  }
+
+  countNeedsHuman(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM applications WHERE status = 'needs_human' AND resolved_at IS NULL`)
+      .get() as { n: number }
+    return row.n
   }
 
   // ---------------------------------------------------------------------- runs

@@ -24,6 +24,18 @@ async function main(): Promise<void> {
       await doctor()
       break
 
+    case 'review':
+      review()
+      break
+
+    case 'resolve': {
+      const id = Number(process.argv[3])
+      if (!Number.isInteger(id)) throw new Error('Usage: npm run resolve -- <application id>')
+      new Repo().resolveNeedsHuman(id)
+      console.log(`#${id} marked as handled.`)
+      break
+    }
+
     default:
       console.log(`
 head-hunter-hunter
@@ -31,9 +43,32 @@ head-hunter-hunter
   npm run login            Log in to hh.ru by hand, once. Saves the browser profile.
   npm run doctor           Check config, database, session — without touching hh.
   npm run selectors:probe  Verify every selector against live hh.ru (research stage 0).
+  npm run review           List vacancies parked for manual handling.
+  npm run resolve -- <id>  Mark one parked vacancy as handled.
 `)
       process.exitCode = command ? 1 : 0
   }
+}
+
+/**
+ * The manual-work queue. These are vacancies the bot refused on purpose — employer
+ * questions, tests, external ATS — not failures. Printed with full URLs so they can
+ * be walked through by hand.
+ */
+function review(): void {
+  const rows = new Repo().needsHuman()
+  if (rows.length === 0) {
+    console.log('\nNothing parked for manual handling.\n')
+    return
+  }
+  console.log(`\n${rows.length} vacancies need you:\n`)
+  for (const r of rows) {
+    const reason = r.needs_human_reason ?? 'unknown'
+    console.log(`  #${r.application_id}  ${r.title}`)
+    console.log(`      ${r.company ?? '—'} · ${reason} · ${r.created_at.slice(0, 16).replace('T', ' ')}`)
+    console.log(`      ${r.url}`)
+  }
+  console.log(`\n  Handled one? npm run resolve -- <id>\n`)
 }
 
 /** Everything checkable without making a single request to hh. */
@@ -56,6 +91,8 @@ async function doctor(): Promise<void> {
   const repo = new Repo()
   console.log(`\ndatabase    ok`)
   console.log(`applied     ${repo.countAppliedWithin(24)} in the last rolling 24h, ${repo.countAppliedWithin(1)} in the last hour`)
+  const parked = repo.countNeedsHuman()
+  if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
 
   const hasProfile = existsSync(BROWSER_PROFILE_DIR) && readdirSync(BROWSER_PROFILE_DIR).length > 0
   console.log(`profile     ${hasProfile ? BROWSER_PROFILE_DIR : 'missing — run `npm run login`'}`)

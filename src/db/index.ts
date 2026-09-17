@@ -16,8 +16,29 @@ export function getDb(): Database.Database {
 
   const schemaPath = resolve(dirname(fileURLToPath(import.meta.url)), 'schema.sql')
   db.exec(readFileSync(schemaPath, 'utf8'))
+  migrate(db)
 
   return db
+}
+
+/**
+ * CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so columns
+ * added later never appear in an existing database. Add them explicitly.
+ *
+ * Deliberately additive only: this tool's data (application history, the rolling-window
+ * timestamps) is not reproducible, so a migration never drops or rewrites a column.
+ */
+function migrate(db: Database.Database): void {
+  const added: Array<[string, string, string]> = [
+    ['applications', 'needs_human_reason', 'TEXT'],
+    ['applications', 'resolved_at', 'TEXT'],
+  ]
+  for (const [table, column, type] of added) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+    }
+  }
 }
 
 export function closeDb(): void {

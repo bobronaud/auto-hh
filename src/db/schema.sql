@@ -61,7 +61,11 @@ CREATE TABLE IF NOT EXISTS runs (
   stop_reason TEXT
 );
 
--- status: planned | applied | skipped | failed | dry_run
+-- status: planned | applied | skipped | failed | dry_run | needs_human
+--
+-- needs_human — вакансия, которую нельзя откликнуть автоматически: вопросы
+-- работодателя, тестовое задание, отклик на внешнем сайте. Не ошибка и не пропуск:
+-- это очередь ручной работы, её видно в UI и по ней можно пройтись самому.
 -- error_code: таксономия hh (§1.3) — limit_exceeded, too_long_message,
 -- already_applied, test_required, resume_visibility_conflict, wrong_state, ...
 CREATE TABLE IF NOT EXISTS applications (
@@ -73,6 +77,10 @@ CREATE TABLE IF NOT EXISTS applications (
   error_code      TEXT,
   error_message   TEXT,
   screenshot_path TEXT,
+  -- Для needs_human: employer_questions | test_required | relocation |
+  -- external_apply | unrecognised_form. Плюс отметка «разобрано вручную».
+  needs_human_reason TEXT,
+  resolved_at        TEXT,
   -- Время реальной отправки. Считается ТОЛЬКО для status='applied' и только по
   -- этому полю строится скользящее окно 24ч (§5.1). Не календарные сутки.
   applied_at      TEXT,

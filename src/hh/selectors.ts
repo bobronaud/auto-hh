@@ -68,9 +68,15 @@ export const selectors = {
     card: ['[data-qa="vacancy-serp__vacancy"]', '[data-qa="serp-item"]'],
     cardTitleLink: ['[data-qa="serp-item__title"]', 'a[data-qa="vacancy-serp__vacancy-title"]'],
     cardCompany: ['[data-qa="vacancy-serp__vacancy-employer"]'],
+    /**
+     * Зарплата есть не у всех вакансий — отсутствие в конкретной карточке не значит,
+     * что селектор неверен. Но в выгрузке её не было ни в одной из 50 карточек,
+     * так что проверять оба варианта имени.
+     */
     cardSalary: [
       '[data-qa="vacancy-serp__vacancy-compensation"]',
       '[data-qa="vacancy-serp__vacancy_compensation"]',
+      '[data-qa*="compensation"]',
     ],
     cardArea: ['[data-qa="vacancy-serp__vacancy-address"]'],
     cardSnippet: [
@@ -81,7 +87,13 @@ export const selectors = {
     cardHasTest: ['[data-qa="vacancy-serp__vacancy-with-test"]'],
     /** Кнопка отклика прямо из выдачи (быстрый путь, минует страницу вакансии). */
     cardApplyButton: ['[data-qa="vacancy-serp__vacancy_response"]'],
-    nextPage: ['[data-qa="pager-next"]', 'a[data-qa="pager-next"]'],
+    /**
+     * hh пагинирует ссылками на страницы, без кнопки «вперёд». Ходим по &page=N
+     * напрямую (searchUrl.ts) — эти селекторы нужны только чтобы понять, есть ли
+     * ещё страницы.
+     */
+    pagerBlock: ['[data-qa="pager-block"]'],
+    pagerPage: ['[data-qa="pager-page"]'],
   },
 
   /** Страница вакансии. */
@@ -104,11 +116,17 @@ export const selectors = {
   },
 
   /**
-   * Модалка отклика. Подтверждённая probe механика:
-   *   открыть модалку → выбрать резюме в кастомном дропдауне (не <select>)
-   *   → нажать «Добавить сопроводительное» → поле письма ПОЯВЛЯЕТСЯ в DOM
-   *   → ввести текст → «Откликнуться»
-   * Поле письма отсутствует до нажатия тоггла — искать его раньше бессмысленно.
+   * Отклик. У hh ДВА разных потока, подтверждено пробой:
+   *
+   *   A. Модалка (простая вакансия): div[role="dialog"] с дропдауном резюме,
+   *      кнопкой «Добавить сопроводительное» и отправкой — всё на месте.
+   *   B. Отдельная страница /applicant/vacancy_response (вакансия с вопросами
+   *      работодателя или тестовым): модалки нет вообще, форма открывается
+   *      страницей. Именно сюда попала вторая проба.
+   *
+   * Поток B автоматизации не подлежит: вопросы работодателя — свободный текст,
+   * который должен писать человек. Такие вакансии помечаются needs_human и
+   * откладываются в UI (см. applyFlow.ts).
    */
   apply: {
     modal: ['[data-qa="vacancy-response-popup"]', 'div[role="dialog"]'],
@@ -117,23 +135,22 @@ export const selectors = {
       '[data-qa="resume-select"]',
       '[data-qa="vacancy-response-popup-resume-select"]',
       'div[role="dialog"] [role="combobox"]',
-      'div[role="dialog"] button:has(img)',
+      '[data-qa*="resume"][role="button"]',
     ],
     resumeOption: [
       '[data-qa="resume-select-option"]',
       '[role="option"]',
-      'div[role="dialog"] [role="listbox"] li',
+      '[role="listbox"] li',
     ],
-    /** Раскрывает поле письма. Текст — самый надёжный якорь до уточнения data-qa. */
+    /** Подтверждено пробой. */
     letterToggle: [
       '[data-qa="vacancy-response-letter-toggle"]',
       'button:has-text("Добавить сопроводительное")',
-      'text=Добавить сопроводительное',
     ],
+    /** Подтверждено пробой. maxlength у поля НЕТ — лимит длины замерять вручную. */
     letterTextarea: [
       '[data-qa="vacancy-response-popup-form-letter-input"]',
       'textarea[data-qa*="letter"]',
-      'textarea[name="letter"]',
       'div[role="dialog"] textarea',
     ],
     submitButton: [
@@ -146,14 +163,32 @@ export const selectors = {
       '[data-qa="vacancy-response-success"]',
       'text=/Отклик отправлен/i',
       'text=/Резюме отправлено/i',
+      'text=/Вы откликнулись/i',
     ],
-    /** Экраны, требующие человека: тест, вопросы работодателя, релокация. */
-    testRedirect: ['text=/тестовое задание/i', '[data-qa="vacancy-test"]'],
-    employerQuestions: ['[data-qa="vacancy-response-questions"]'],
-    relocationWarning: ['text=/переезд/i'],
-    /** Лимит исчерпан (§1.3, limit_exceeded). */
-    limitExceeded: ['text=/лимит откликов/i', 'text=/превышено количество откликов/i'],
-    tooLongMessage: ['text=/слишком длинн/i'],
+
+    /** --- Признаки потока B: дальше нужен человек --- */
+    employerQuestions: [
+      '[data-qa="vacancy-response-questions"]',
+      '[data-qa*="question"]',
+      'form [data-qa*="task"]',
+      'text=/Вопросы работодателя/i',
+      'text=/Ответьте на вопрос/i',
+    ],
+    testRedirect: [
+      '[data-qa="vacancy-test"]',
+      'text=/тестовое задание/i',
+      'text=/пройти тест/i',
+    ],
+    relocationWarning: ['text=/готовы к переезду/i', 'text=/релокац/i'],
+
+    /** --- Ошибки (§1.3) --- */
+    limitExceeded: [
+      'text=/лимит откликов/i',
+      'text=/превышено количество откликов/i',
+      'text=/больше откликов сегодня/i',
+    ],
+    tooLongMessage: ['text=/слишком длинн/i', 'text=/превышена длина/i'],
+    alreadyAppliedNotice: ['text=/Вы уже откликались/i', 'text=/Вы откликнулись/i'],
   },
 } as const
 

@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "login": "tsx src/cli.ts login",
     "doctor": "tsx src/cli.ts doctor",
@@ -11,7 +13,9 @@
     "server": "tsx watch src/server/index.ts",
     "ui": "vite --config ui/vite.config.ts",
     "dev": "npm-run-all --parallel server ui",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "review": "tsx src/cli.ts review",
+    "resolve": "tsx src/cli.ts resolve"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
