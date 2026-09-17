@@ -68,16 +68,23 @@ async function scrapePage(page: Page): Promise<ScrapedCard[]> {
     apply: selectors.search.cardApplyButton[0]!,
   }
 
+  // NOTE: nothing inside this callback may assign a function to a const.
+  // tsx compiles with esbuild's keepNames, which rewrites such declarations into a
+  // `__name(...)` helper that does not exist in the page context — the callback is
+  // serialised and evaluated in the browser, where that helper was never defined.
+  // Inline expressions only; see CLAUDE.md.
   const raw = await page.locator(sel.card).evaluateAll((els, s) => {
-    const txt = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim() || null
     return els.map((el) => {
       const link = el.querySelector(s.title) as HTMLAnchorElement | null
+      const company = el.querySelector(s.company)
+      const area = el.querySelector(s.area)
+      const salary = el.querySelector(s.salary)
       return {
         url: link?.href ?? null,
-        title: txt(link),
-        company: txt(el.querySelector(s.company)),
-        area: txt(el.querySelector(s.area)),
-        salary: txt(el.querySelector(s.salary)),
+        title: (link?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
+        company: (company?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
+        area: (area?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
+        salary: (salary?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
         hasTest: el.querySelector(s.test) !== null,
         canApplyFromList: el.querySelector(s.apply) !== null,
       }

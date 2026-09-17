@@ -23,6 +23,21 @@ const STEALTH_INIT = `
   Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru'] });
 `
 
+/**
+ * Safety net for a tsx/esbuild quirk.
+ *
+ * tsx compiles with keepNames, which rewrites `const f = () => {}` into
+ * `const f = __name(() => {}, "f")`. When such a callback is serialised into the page
+ * for evaluate(), `__name` is not defined there and the call throws mid-run.
+ *
+ * The real fix is to keep evaluate() callbacks free of named function bindings — and
+ * that is the rule (CLAUDE.md). This identity shim only stops a future slip from
+ * killing a run that is already halfway through applying.
+ */
+const ESBUILD_NAME_SHIM = `
+  globalThis.__name = globalThis.__name || function (fn) { return fn };
+`
+
 export async function openContext(cfg: Config): Promise<BrowserContext> {
   ensureDirs()
 
@@ -38,6 +53,7 @@ export async function openContext(cfg: Config): Promise<BrowserContext> {
   })
 
   await ctx.addInitScript(STEALTH_INIT)
+  await ctx.addInitScript(ESBUILD_NAME_SHIM)
 
   if (cfg.browser.headless) {
     log.warn('headless=true — DDoS-Guard is harsher here and there is no way to solve a captcha. Prefer headful.')
