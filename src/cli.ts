@@ -54,6 +54,14 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'letters': {
+      const cfg = loadConfig()
+      const n = process.argv[3] ? Number(process.argv[3]) : 10
+      const { writeLetters, printLettersResult } = await import('./pipeline/letters.js')
+      printLettersResult(await writeLetters(cfg, n), cfg)
+      break
+    }
+
     case 'review':
       review()
       break
@@ -74,6 +82,7 @@ head-hunter-hunter
   npm run doctor           Check config, database, session — without touching hh.
   npm run selectors:probe  Verify every selector against live hh.ru (research stage 0).
   npm run collect          Scrape the search results, filter and route. Sends nothing.
+  npm run letters -- <n>   Write cover letters for the next n vacancies in the queue.
   npm run apply -- <n>     Answer up to n stored vacancies (dry run unless dryRun=false).
   npm run review           List vacancies parked for manual handling.
   npm run failures         List applications that did not go through, with causes.
@@ -160,6 +169,8 @@ async function doctor(): Promise<void> {
   console.log(`pending     ${repo.countPending()} vacancies waiting to be answered`)
   const parked = repo.countNeedsHuman()
   if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
+  const unapproved = repo.countLettersAwaitingApproval()
+  if (unapproved > 0) console.log(`letters     ${unapproved} written, awaiting approval`)
   const failed = repo.countFailed()
   if (failed > 0) console.log(`failed      ${failed} applications did not go through — npm run failures`)
 

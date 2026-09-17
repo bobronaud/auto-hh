@@ -96,10 +96,11 @@
     "language": "ru"
   },
   "llm": {
-    "provider": "none",
-    "model": "",
+    "provider": "claude-cli",
+    "model": "sonnet",
     "apiKeyEnv": "LLM_API_KEY",
-    "maxConcurrency": 2
+    "maxConcurrency": 1,
+    "timeoutSec": 120
   },
   "browser": {
     "headless": false,

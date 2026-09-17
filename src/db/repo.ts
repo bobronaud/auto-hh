@@ -200,6 +200,48 @@ export class Repo {
       .all(limit) as VacancyRow[]
   }
 
+  /**
+   * Vacancies queued for an application that have no letter yet.
+   *
+   * Same ordering as pendingVacancies so the letters written are the ones that will
+   * actually be used next, rather than for vacancies far down the queue.
+   */
+  vacanciesNeedingLetters(limit = 20): VacancyRow[] {
+    return this.db
+      .prepare(
+        `SELECT v.* FROM vacancies v
+         WHERE v.archived = 0
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+           AND NOT EXISTS (SELECT 1 FROM letters l WHERE l.vacancy_id = v.id)
+         ORDER BY
+           CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,
+           CAST(v.hh_id AS INTEGER) DESC
+         LIMIT ?`,
+      )
+      .all(limit) as VacancyRow[]
+  }
+
+  /** Newest letter for a vacancy, approved or not. */
+  latestLetter(vacancyId: number): { id: number; text: string; approved_at: string | null } | undefined {
+    return this.db
+      .prepare(
+        `SELECT id, text, approved_at FROM letters
+         WHERE vacancy_id = ? ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(vacancyId) as { id: number; text: string; approved_at: string | null } | undefined
+  }
+
+  countLettersAwaitingApproval(): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM letters l
+         WHERE l.approved_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = l.vacancy_id)`,
+      )
+      .get() as { n: number }
+    return row.n
+  }
+
   /** How many vacancies are waiting to be answered. */
   countPending(): number {
     const row = this.db

@@ -1,6 +1,8 @@
 node_modules/
 data/
 config.json
+resume.*.md
+!resume.*.example.md
 .env
 *.log
 dist/

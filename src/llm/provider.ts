@@ -48,11 +48,15 @@ class NoneProvider implements LlmProvider {
 }
 
 import type { Config } from '../config/schema.js'
+import { ClaudeCliProvider } from './claudeCli.js'
 
 export function createProvider(cfg: Config): LlmProvider {
   switch (cfg.llm.provider) {
     case 'none':
       return new NoneProvider()
+
+    case 'claude-cli':
+      return new ClaudeCliProvider(cfg)
     // Stages 4-5 land here. Each is a thin fetch() against the provider's HTTP API;
     // nothing else in the codebase knows which one is in use.
     case 'anthropic':

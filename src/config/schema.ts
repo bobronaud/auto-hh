@@ -93,16 +93,38 @@ const letterSchema = z.object({
   /** Never send a generated letter without a human seeing it first. */
   requireManualApproval: z.boolean().default(true),
   language: z.enum(['ru', 'en']).default('ru'),
+  /**
+   * Letters generated per LLM call.
+   *
+   * This matters far more than the model choice. Every claude-cli invocation re-sends
+   * Claude Code's system prompt, so a batch of 10 measured 24x cheaper per letter
+   * than one-at-a-time ($0.0017 vs $0.041). Too large a batch risks a truncated
+   * response and dilutes per-vacancy attention; 10 is the measured sweet spot.
+   */
+  batchSize: z.number().int().min(1).max(25).default(10),
 })
 
 const llmSchema = z.object({
-  /** 'none' keeps the pipeline runnable before a provider is chosen (stage 4-5). */
-  provider: z.enum(['none', 'anthropic', 'openrouter', 'ollama']).default('none'),
+  /**
+   * 'claude-cli' shells out to the locally installed, already-authenticated `claude`
+   * binary. No API key, no separate billing — it draws on the Claude Code
+   * subscription. The tradeoff is overhead: every call re-sends Claude Code's own
+   * system prompt (~28k tokens) and takes ~4s, against a payload of a few hundred
+   * tokens. Fine for ~30 letters a day, wasteful at 500.
+   *
+   * 'anthropic' calls the API directly and needs a key from console.anthropic.com —
+   * cheaper and faster per letter, but separately billed.
+   */
+  provider: z.enum(['none', 'claude-cli', 'anthropic', 'openrouter', 'ollama']).default('none'),
+  /** For claude-cli: 'sonnet' | 'opus' | 'haiku' or a full model id. */
   model: z.string().default(''),
-  /** Read from env, never stored in config.json. */
+  /** Read from env, never stored in config.json. Unused by claude-cli. */
   apiKeyEnv: z.string().default('LLM_API_KEY'),
   baseUrl: z.string().url().optional(),
+  /** claude-cli spawns a process per call — keep this low. */
   maxConcurrency: z.number().int().min(1).max(8).default(2),
+  /** Seconds before a single generation is abandoned. */
+  timeoutSec: z.number().int().min(10).max(600).default(120),
 })
 
 const browserSchema = z.object({

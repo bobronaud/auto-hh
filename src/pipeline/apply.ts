@@ -69,9 +69,24 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
       const route = routeResume(cfg, { title: v.title, description: v.description })
       log.info(`→ ${v.title.slice(0, 60)}  [${route.resume.id}${route.usedFallback ? ' fallback' : ''}]`)
 
+      // Letters are written ahead of time by `npm run letters`. A vacancy with no
+      // letter is still applied to — unless hh demands one, an application without a
+      // cover letter beats no application at all.
+      const stored = repo.latestLetter(v.id)
+      let letter: string | null = null
+      if (stored) {
+        if (cfg.letter.requireManualApproval && !stored.approved_at) {
+          log.info('   letter not approved yet — skipping')
+          repo.recordApplication({ vacancyId: v.id, runId, status: 'skipped', errorCode: 'letter_unapproved' })
+          result.skipped++
+          continue
+        }
+        letter = stored.text
+      }
+
       let outcome
       try {
-        outcome = await applyToVacancy(page, cfg, { url: v.url, resume: route.resume })
+        outcome = await applyToVacancy(page, cfg, { url: v.url, resume: route.resume, letter })
       } catch (e) {
         if (e instanceof HumanNeededError) {
           result.stopReason = e.state
@@ -89,7 +104,7 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
         continue
       }
 
-      recordOutcome(repo, runId, v, outcome, result)
+      recordOutcome(repo, runId, v, outcome, result, stored?.id ?? null)
 
       if (outcome.status === 'blocked') {
         result.stopReason = 'limit_exceeded'
@@ -122,8 +137,9 @@ function recordOutcome(
   v: VacancyRow,
   outcome: Awaited<ReturnType<typeof applyToVacancy>>,
   result: RunResult,
+  letterId: number | null,
 ): void {
-  const base = { vacancyId: v.id, runId }
+  const base = { vacancyId: v.id, runId, letterId }
 
   switch (outcome.status) {
     case 'applied':
