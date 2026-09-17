@@ -130,23 +130,40 @@ export const selectors = {
    */
   apply: {
     modal: ['[data-qa="vacancy-response-popup"]', 'div[role="dialog"]'],
-    /** Кастомный дропдаун, не select. Клик раскрывает список резюме. */
+    /**
+     * Дропдаун резюме. Подтверждено выгрузкой: это НЕ select и не combobox, а
+     * div[role="button"], внутри которого лежит [data-qa="resume-title"].
+     * Классы у hh хешированные (magritte-select-layout___3THUn_13-0-4) — на них
+     * опираться нельзя, они меняются с каждой сборкой.
+     */
     resumeSelect: [
+      'div[role="dialog"] [role="button"]:has([data-qa="resume-title"])',
       '[data-qa="resume-select"]',
-      '[data-qa="vacancy-response-popup-resume-select"]',
-      'div[role="dialog"] [role="combobox"]',
-      '[data-qa*="resume"][role="button"]',
     ],
+    /** Название выбранного резюме — по нему сверяем, что выбрали нужное. */
+    resumeTitle: ['[data-qa="resume-title"]'],
+    /** Пункты раскрытого списка. Могут рендериться в портале ВНЕ модалки. */
     resumeOption: [
       '[data-qa="resume-select-option"]',
       '[role="option"]',
-      '[role="listbox"] li',
+      '[role="listbox"] [role="button"]',
+      '[role="menu"] [role="menuitem"]',
     ],
-    /** Подтверждено пробой. */
+    /** Подтверждено выгрузкой: data-qa не «vacancy-response-letter-toggle». */
     letterToggle: [
-      '[data-qa="vacancy-response-letter-toggle"]',
+      '[data-qa="add-cover-letter"]',
       'button:has-text("Добавить сопроводительное")',
     ],
+
+    /**
+     * ⚠️ Резюме скрыто от работодателей — отклик не пройдёт (§1.3,
+     * resume_visibility_conflict).
+     *
+     * Элемент присутствует в DOM ВСЕГДА: это collapsible со style="max-height: 0px",
+     * когда предупреждения нет. Проверять только видимость, не существование —
+     * иначе каждая вакансия будет выглядеть заблокированной.
+     */
+    hiddenResumeWarning: ['[data-qa="hidden-resume-warning"]'],
     /** Подтверждено пробой. maxlength у поля НЕТ — лимит длины замерять вручную. */
     letterTextarea: [
       '[data-qa="vacancy-response-popup-form-letter-input"]',

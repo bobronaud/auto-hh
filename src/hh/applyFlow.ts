@@ -26,6 +26,7 @@ export type NeedsHumanReason =
   | 'test_required'
   | 'relocation'
   | 'external_apply'
+  | 'resume_hidden'
   | 'unrecognised_form'
 
 export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
@@ -33,6 +34,7 @@ export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
   test_required: 'Тестовое задание',
   relocation: 'Требуется подтвердить переезд',
   external_apply: 'Отклик на стороннем сайте',
+  resume_hidden: 'Резюме скрыто от работодателей',
   unrecognised_form: 'Незнакомая форма отклика',
 }
 
@@ -65,6 +67,11 @@ export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
     // A dialog CAN carry questions — some employers ask inside the modal.
     if (await hasWithin(modal, selectors.apply.employerQuestions)) {
       return { kind: 'needs_human', reason: 'employer_questions' }
+    }
+    // Resume hidden from employers: hh will refuse the application. The warning node
+    // is always in the DOM as a collapsed container, so only VISIBILITY counts here.
+    if (await visibleWithin(modal, selectors.apply.hiddenResumeWarning)) {
+      return { kind: 'needs_human', reason: 'resume_hidden' }
     }
     // A modal with no letter field and no resume picker is not a shape we know.
     const hasLetter = await hasWithin(modal, selectors.apply.letterToggle)
@@ -110,6 +117,30 @@ export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
 
   // Still on the vacancy page: the click did nothing we can see.
   return { kind: 'blocked', reason: 'unknown', detail: page.url() }
+}
+
+/**
+ * Is any candidate actually VISIBLE inside this container?
+ *
+ * hh keeps collapsed warnings in the DOM with max-height: 0, so presence proves
+ * nothing — checking existence would flag every vacancy as blocked.
+ */
+async function visibleWithin(
+  container: ReturnType<Page['locator']>,
+  candidates: readonly string[],
+): Promise<boolean> {
+  for (const sel of candidates) {
+    try {
+      const loc = container.locator(sel).first()
+      if ((await loc.count()) > 0 && (await loc.isVisible())) {
+        const box = await loc.boundingBox()
+        if (box && box.height > 0) return true
+      }
+    } catch {
+      // A bad candidate must not abort the scan.
+    }
+  }
+  return false
 }
 
 /** Does any candidate exist INSIDE this container? Scope is the whole point. */

@@ -228,11 +228,14 @@ export async function probe(cfg: Config): Promise<void> {
         await page.waitForTimeout(1200)
         await screenshot(page, 'probe-resume-dropdown')
         await dump(page, 'resume-dropdown', selectors.apply.modal[1]!)
-        const optionCount = await page
-          .locator(selectors.apply.resumeOption[1]!)
-          .count()
-          .catch(() => 0)
-        notes.push(`Resume dropdown opened; ${optionCount} option(s) visible.`)
+        // Options may render in a portal OUTSIDE the modal, so dump the whole body
+        // rather than the dialog — a list we cannot see is a list we cannot pick from.
+        await dump(page, 'resume-dropdown-body', 'body')
+        const titles = await page
+          .locator(selectors.apply.resumeTitle[0]!)
+          .evaluateAll((els) => els.map((e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim()))
+          .catch(() => [] as string[])
+        notes.push(`Resume titles visible after opening the dropdown: ${JSON.stringify(titles)}`)
         await page.keyboard.press('Escape').catch(() => {})
         await page.waitForTimeout(500)
       } else {
