@@ -32,7 +32,6 @@
   ],
   "routing": {
     "fallbackResumeId": "react",
-    "skipOnTie": true,
     "titleWeight": 5,
     "minScore": 1
   },

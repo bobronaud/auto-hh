@@ -3,9 +3,14 @@ import type { Config, ResumeConfig } from '../config/schema.js'
 /**
  * Pick which resume answers a vacancy (React vs Vue).
  *
- * The vacancy decides, not the config. A title hit weighs far more than a body hit:
- * "Vue-разработчик" whose description mentions React in passing ("опыт с React будет
- * плюсом") is a Vue vacancy, and matching on raw body counts would get that backwards.
+ * Two rules, in this order:
+ *
+ *   1. A title hit weighs far more than a body hit. "Vue-разработчик" whose
+ *      description mentions React in passing ("опыт с React будет плюсом") is a Vue
+ *      vacancy; counting raw body mentions would get that backwards.
+ *   2. Anything not clearly won by a specialised resume goes to the fallback. This
+ *      function NEVER declines to answer — maximum coverage is the point of the tool,
+ *      and a React resume is a defensible answer to an unlabelled Frontend vacancy.
  */
 
 export interface RouteInput {
@@ -15,12 +20,14 @@ export interface RouteInput {
 }
 
 export interface RouteResult {
-  resume: ResumeConfig | null
+  /** Always a resume — routing never returns "none". */
+  resume: ResumeConfig
   reason: string
   scores: Record<string, number>
   /** True when the title alone settled it — no need to open the vacancy page. */
   decidedByTitle: boolean
-  ambiguous: boolean
+  /** The fallback answered because nothing won outright. Still an application. */
+  usedFallback: boolean
 }
 
 /** Whole-word-ish match so "vue" does not fire inside "value" or "revue". */
@@ -50,9 +57,12 @@ function scoreResume(
 }
 
 export function routeResume(cfg: Config, input: RouteInput): RouteResult {
-  const { titleWeight, minScore, skipOnTie, fallbackResumeId } = cfg.routing
+  const { titleWeight, minScore, fallbackResumeId } = cfg.routing
   const title = input.title ?? ''
   const body = input.description ?? ''
+
+  // Config validation guarantees this resolves.
+  const fallback = cfg.resumes.find((r) => r.id === fallbackResumeId)!
 
   const scores: Record<string, number> = {}
   const titleOnly: Record<string, number> = {}
@@ -67,47 +77,53 @@ export function routeResume(cfg: Config, input: RouteInput): RouteResult {
   const topScore = top ? (scores[top.id] ?? 0) : 0
   const secondScore = second ? (scores[second.id] ?? 0) : 0
 
-  const fallback = cfg.resumes.find((r) => r.id === fallbackResumeId) ?? null
+  const fell = (reason: string): RouteResult => ({
+    resume: fallback,
+    reason,
+    scores,
+    decidedByTitle: false,
+    usedFallback: true,
+  })
 
-  if (!top || topScore < minScore) {
-    return {
-      resume: fallback,
-      reason: fallback
-        ? `no stack marker found — falling back to "${fallback.id}"`
-        : 'no stack marker found and no fallback configured',
-      scores,
-      decidedByTitle: false,
-      ambiguous: false,
-    }
-  }
-
+  if (!top || topScore < minScore) return fell('no stack marker — fallback')
   if (second && topScore === secondScore) {
+    return fell(`both stacks named equally (${topScore}) — fallback`)
+  }
+  if (top.id === fallback.id) {
+    // The fallback won on merit rather than by default; worth distinguishing in logs.
     return {
-      resume: skipOnTie ? null : fallback,
-      reason: `ambiguous: "${top.id}" and "${second.id}" tie at ${topScore}`,
+      resume: top,
+      reason: `"${top.id}" wins (${topScore} vs ${secondScore})`,
       scores,
-      decidedByTitle: false,
-      ambiguous: true,
+      decidedByTitle: decidedByTitle(cfg, titleOnly, top.id, minScore),
+      usedFallback: false,
     }
   }
-
-  // Did the title alone already pick this winner? If so a search card is enough and
-  // we can skip opening the vacancy page just to route.
-  const titleRanked = [...cfg.resumes].sort((a, b) => (titleOnly[b.id] ?? 0) - (titleOnly[a.id] ?? 0))
-  const titleTop = titleRanked[0]
-  const decidedByTitle =
-    !!titleTop &&
-    titleTop.id === top.id &&
-    (titleOnly[titleTop.id] ?? 0) >= minScore &&
-    (titleOnly[titleTop.id] ?? 0) > (titleRanked[1] ? (titleOnly[titleRanked[1].id] ?? 0) : 0)
 
   return {
     resume: top,
-    reason: decidedByTitle
-      ? `title says "${top.id}" (${topScore} vs ${secondScore})`
-      : `body says "${top.id}" (${topScore} vs ${secondScore})`,
+    reason: `"${top.id}" wins (${topScore} vs ${secondScore})`,
     scores,
-    decidedByTitle,
-    ambiguous: false,
+    decidedByTitle: decidedByTitle(cfg, titleOnly, top.id, minScore),
+    usedFallback: false,
   }
+}
+
+/**
+ * Did the title alone already pick this winner? If so a search card is enough and we
+ * can skip opening the vacancy page just to route — navigations are expensive now
+ * that the API is closed.
+ */
+function decidedByTitle(
+  cfg: Config,
+  titleOnly: Record<string, number>,
+  winnerId: string,
+  minScore: number,
+): boolean {
+  const ranked = [...cfg.resumes].sort((a, b) => (titleOnly[b.id] ?? 0) - (titleOnly[a.id] ?? 0))
+  const top = ranked[0]
+  if (!top || top.id !== winnerId) return false
+  const topScore = titleOnly[top.id] ?? 0
+  const secondScore = ranked[1] ? (titleOnly[ranked[1].id] ?? 0) : 0
+  return topScore >= minScore && topScore > secondScore
 }

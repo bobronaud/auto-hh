@@ -80,7 +80,7 @@ async function doctor(): Promise<void> {
   for (const r of cfg.resumes) {
     console.log(`resume      ${r.id.padEnd(6)} "${r.title}"  ← ${r.match.join(', ')}`)
   }
-  console.log(`routing     fallback=${cfg.routing.fallbackResumeId || '(none, skip)'} · ties ${cfg.routing.skipOnTie ? 'skipped' : 'sent to fallback'}`)
+  console.log(`routing     everything not clearly matched → "${cfg.routing.fallbackResumeId}" (nothing is skipped)`)
   console.log(`limits      ${cfg.limits.perDay}/day, ${cfg.limits.perHour}/hour (hh ceiling: 200 per rolling 24h)`)
   console.log(`letter cap  ${cfg.letter.maxChars} chars ${cfg.letter.requireManualApproval ? '(manual approval on)' : '(NO manual approval)'}`)
   console.log(`llm         ${isConfigured(cfg) ? `${cfg.llm.provider} / ${cfg.llm.model}` : 'none — scoring and letters are not wired yet'}`)

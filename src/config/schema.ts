@@ -122,15 +122,17 @@ const resumeSchema = z.object({
   file: z.string().default(''),
 })
 
-/** What to do when no resume clearly wins. */
+/**
+ * Which resume answers which vacancy.
+ *
+ * The rule is deliberately asymmetric: a specialised resume wins only when the
+ * vacancy clearly calls for it, and everything else goes to the fallback. Nothing is
+ * ever skipped for being ambiguous — coverage is the point of this tool, and a
+ * generalist Frontend resume is a defensible answer to an ambiguous Frontend vacancy.
+ */
 const routingSchema = z.object({
-  /** Resume id used when nothing matches, or '' to skip such vacancies. */
-  fallbackResumeId: z.string().default(''),
-  /**
-   * When two resumes tie (a vacancy naming both React and Vue), skip rather than
-   * guess. Answering a Vue vacancy with a React resume is worse than not answering.
-   */
-  skipOnTie: z.boolean().default(true),
+  /** Resume used whenever no other one clearly wins. Must name a real resume id. */
+  fallbackResumeId: z.string().min(1),
   /** A title hit is worth this many body hits. */
   titleWeight: z.number().min(1).default(5),
   /** Minimum score before a resume is considered a match at all. */
@@ -144,7 +146,7 @@ export const configSchema = z.object({
    */
   dryRun: z.boolean().default(true),
   resumes: z.array(resumeSchema).min(1),
-  routing: routingSchema.default({}),
+  routing: routingSchema,
   search: searchSchema,
   filters: filtersSchema.default({}),
   limits: limitsSchema.default({}),
@@ -153,6 +155,19 @@ export const configSchema = z.object({
   llm: llmSchema.default({}),
   browser: browserSchema.default({}),
 })
+  .superRefine((cfg, ctx) => {
+    const ids = cfg.resumes.map((r) => r.id)
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resumes'], message: 'resume ids must be unique' })
+    }
+    if (!ids.includes(cfg.routing.fallbackResumeId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['routing', 'fallbackResumeId'],
+        message: `must be one of: ${ids.join(', ')}`,
+      })
+    }
+  })
 
 export type Config = z.infer<typeof configSchema>
 export type ResumeConfig = z.infer<typeof resumeSchema>
