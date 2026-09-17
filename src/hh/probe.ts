@@ -83,7 +83,7 @@ export async function probe(cfg: Config): Promise<void> {
     await page.goto(`${HH_BASE}/applicant/negotiations`, { waitUntil: 'domcontentloaded' })
     const state = await detectState(page)
     log.info(`Session state: ${state}`)
-    if (state !== 'ok') {
+    if (state !== 'logged_in') {
       log.error('Not usable. Run `npm run login` first, or solve the captcha in the window.')
       await screenshot(page, 'probe-blocked')
       return

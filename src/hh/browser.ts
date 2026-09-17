@@ -50,20 +50,32 @@ export async function getPage(ctx: BrowserContext): Promise<Page> {
   return existing ?? (await ctx.newPage())
 }
 
-export type PageState = 'ok' | 'logged_out' | 'captcha' | 'blocked'
+/**
+ * 'unknown' is a first-class answer, not a synonym for 'ok'.
+ *
+ * Absence of evidence is not evidence: hh serves plenty of pages carrying neither
+ * logged-in chrome nor a login link. Collapsing that into 'ok' is what made `login`
+ * report "already logged in" while staring at the login form.
+ */
+export type PageState = 'logged_in' | 'logged_out' | 'captcha' | 'blocked' | 'unknown'
 
 /**
  * What are we actually looking at? Every navigation goes through this before the
  * caller trusts the DOM. Antibot is checked first: a captcha page can still carry
- * logged-in chrome and would otherwise read as 'ok'.
+ * logged-in chrome and would otherwise read as logged in.
  */
 export async function detectState(page: Page): Promise<PageState> {
   if (await firstMatch(page, selectors.antibot.captcha)) return 'captcha'
   if (await firstMatch(page, selectors.antibot.ddosGuard)) return 'captcha'
   if (await firstMatch(page, selectors.antibot.blocked)) return 'blocked'
-  if (await firstMatch(page, selectors.auth.loggedIn)) return 'ok'
+
+  // The login URL is decisive on its own — hh redirects there whenever a session dies.
+  if (/\/account\/login/.test(page.url())) return 'logged_out'
+
+  if (await firstMatch(page, selectors.auth.loggedIn)) return 'logged_in'
+  if (await firstMatch(page, selectors.auth.loginForm)) return 'logged_out'
   if (await firstMatch(page, selectors.auth.loggedOut)) return 'logged_out'
-  return 'ok'
+  return 'unknown'
 }
 
 export class HumanNeededError extends Error {
@@ -76,7 +88,9 @@ export class HumanNeededError extends Error {
         ? 'Captcha or DDoS-Guard challenge — solve it in the open browser window, then rerun.'
         : state === 'logged_out'
           ? 'Session is logged out — run `npm run login`.'
-          : 'hh.ru is blocking this session. Stop, wait, and do not retry in a loop.',
+          : state === 'blocked'
+            ? 'hh.ru is blocking this session. Stop, wait, and do not retry in a loop.'
+            : 'Unrecognised page — selectors are probably stale. Check the screenshot.',
     )
     this.name = 'HumanNeededError'
   }
@@ -86,11 +100,19 @@ export class HumanNeededError extends Error {
 export async function goto(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 })
   const state = await detectState(page)
-  if (state !== 'ok') {
-    const shot = await screenshot(page, `state-${state}`)
-    log.error(`Page state: ${state}`, { url, shot })
-    throw new HumanNeededError(state, shot)
+
+  if (state === 'logged_in') return
+
+  // 'unknown' is not fatal here: a vacancy page may legitimately lack auth chrome.
+  // Callers that need certainty (auth.ts) check detectState themselves.
+  if (state === 'unknown') {
+    log.debug('Page state unrecognised — continuing, but selectors may be stale.', { url })
+    return
   }
+
+  const shot = await screenshot(page, `state-${state}`)
+  log.error(`Page state: ${state}`, { url, shot })
+  throw new HumanNeededError(state, shot)
 }
 
 export async function screenshot(page: Page, label: string): Promise<string> {

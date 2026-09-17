@@ -27,6 +27,20 @@ export const selectors = {
       'a[href*="/account/login"]',
       '[data-qa="mainmenu_login"]',
     ],
+    /**
+     * Positive evidence that we are ON the login page. Needed because the absence
+     * of logged-in chrome is not itself proof of anything — hh renders plenty of
+     * pages with neither marker.
+     */
+    loginForm: [
+      '[data-qa="account-signup-submit"]',
+      '[data-qa="account-login-submit"]',
+      'input[name="username"]',
+      'input[name="login"]',
+      'input[type="password"]',
+      'form[action*="/account/login"]',
+      '[data-qa="expand-login-by-password"]',
+    ],
   },
 
   /** Антибот. Ловим, останавливаемся, зовём человека (§2.2). Никогда не решаем сами. */

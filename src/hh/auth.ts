@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from 'playwright'
-import { HH_BASE, openContext, getPage, detectState, screenshot } from './browser.js'
+import { HH_BASE, openContext, getPage, detectState, screenshot, type PageState } from './browser.js'
 import { logger } from '../core/logger.js'
 import { limitWarnings, type Config } from '../config/schema.js'
 
@@ -26,13 +26,19 @@ export async function login(cfg: Config): Promise<void> {
   try {
     await page.goto(`${HH_BASE}/account/login`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
 
-    if ((await detectState(page)) === 'ok') {
+    // Only a positive 'logged_in' short-circuits. 'unknown' means we could not tell,
+    // and the safe reading of "could not tell" is "keep the window open".
+    const initial = await detectState(page)
+    if (initial === 'logged_in') {
       log.info('Already logged in — the existing profile is still valid. Nothing to do.')
       return
     }
+    if (initial === 'unknown') {
+      log.warn('Could not recognise this page. Leaving the window open — log in if you see a form.')
+    }
 
     log.info('Browser is open. Log in by hand: password, SMS/email code, captcha if asked.')
-    log.info(`Waiting up to ${Math.round(cfg.browser.manualActionTimeoutMs / 1000)}s...`)
+    log.info(`Waiting up to ${Math.round(cfg.browser.manualActionTimeoutMs / 1000)}s. The window stays open until you are in.`)
 
     await waitForLogin(page, cfg.browser.manualActionTimeoutMs)
     log.info('Logged in. Session saved to the persistent profile — later runs reuse it.')
@@ -41,15 +47,30 @@ export async function login(cfg: Config): Promise<void> {
   }
 }
 
-/** Poll rather than wait on a selector: the user may take several navigations to get there. */
+/**
+ * Poll rather than wait on a selector: logging in takes several navigations, and a
+ * captcha step in the middle would break any single waitFor.
+ */
 async function waitForLogin(page: Page, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
+  let lastState: PageState | null = null
+
   while (Date.now() < deadline) {
     if (page.isClosed()) throw new Error('Browser window was closed before login finished.')
-    if ((await detectState(page).catch(() => 'logged_out' as const)) === 'ok') return
+
+    const state = await detectState(page).catch(() => 'unknown' as const)
+    if (state !== lastState) {
+      log.debug(`page state: ${state}`)
+      lastState = state
+    }
+    if (state === 'logged_in') return
+
     await new Promise((r) => setTimeout(r, 2000))
   }
-  throw new Error('Timed out waiting for manual login.')
+  throw new Error(
+    `Timed out after ${Math.round(timeoutMs / 1000)}s. If you did log in, the loggedIn selectors are stale — ` +
+      'run `npm run selectors:probe` while logged in.',
+  )
 }
 
 export interface HealthReport {
@@ -72,8 +93,8 @@ export async function health(cfg: Config): Promise<HealthReport> {
       timeout: 45_000,
     })
     const state = await detectState(page)
-    const report: HealthReport = { loggedIn: state === 'ok', state, url: page.url() }
-    if (state !== 'ok') report.screenshot = await screenshot(page, `health-${state}`)
+    const report: HealthReport = { loggedIn: state === 'logged_in', state, url: page.url() }
+    if (state !== 'logged_in') report.screenshot = await screenshot(page, `health-${state}`)
     return report
   } finally {
     await ctx.close()
