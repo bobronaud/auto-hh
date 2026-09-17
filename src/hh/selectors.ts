@@ -142,13 +142,19 @@ export const selectors = {
     ],
     /** Название выбранного резюме — по нему сверяем, что выбрали нужное. */
     resumeTitle: ['[data-qa="resume-title"]'],
-    /** Пункты раскрытого списка. Могут рендериться в портале ВНЕ модалки. */
-    resumeOption: [
-      '[data-qa="resume-select-option"]',
-      '[role="option"]',
-      '[role="listbox"] [role="button"]',
-      '[role="menu"] [role="menuitem"]',
-    ],
+    /**
+     * Пункты раскрытого списка. Подтверждено выгрузкой: это НЕ role="option", а
+     * радио-список, рендерится в портале ВНЕ модалки — искать по всей странице.
+     *
+     *   <div data-qa="cell">
+     *     <span data-qa="radio-container"><input type="radio" value="<id резюме>">
+     *     <div data-qa="resume-title">…<div data-qa="cell-text-content">Название
+     */
+    resumeOption: ['[data-qa="cell"]:has([data-qa="radio-container"])'],
+    /** Текст названия внутри пункта — по нему выбираем нужное резюме. */
+    resumeOptionText: ['[data-qa="cell-text-content"]'],
+    /** value радио-инпута — стабильный id резюме, переживает переименование. */
+    resumeOptionInput: ['[data-qa="radio-container"] input[type="radio"]'],
     /** Подтверждено выгрузкой: data-qa не «vacancy-response-letter-toggle». */
     letterToggle: [
       '[data-qa="add-cover-letter"]',
