@@ -3,12 +3,16 @@ import { resolve } from 'node:path'
 import type { Page } from 'playwright'
 import { openContext, getPage, detectState, screenshot, HH_BASE } from './browser.js'
 import { selectors } from './selectors.js'
+import { classifyApplyFlow } from './applyFlow.js'
 import { buildSearchUrl } from './searchUrl.js'
 import { PROBE_DIR } from '../core/paths.js'
 import { logger } from '../core/logger.js'
 import type { Config } from '../config/schema.js'
 
 const log = logger('probe')
+
+/** How many vacancies to walk before giving up on finding a modal-flow one. */
+const MAX_VACANCIES = 8
 
 /**
  * Recon tooling for RESEARCH stage 0.2/0.3.
@@ -146,63 +150,127 @@ export async function probe(cfg: Config): Promise<void> {
         : 'has_test NOT found in search cards — either no test vacancies on this page, or the flag needs the vacancy page. Re-run on a search that surely contains one.',
     )
 
-    // --- 3. A real vacancy page, reached the way the scraper will reach it.
-    const firstCard = page.locator(selectors.search.cardTitleLink[0]!).first()
-    const href = await firstCard.getAttribute('href').catch(() => null)
-    if (href) {
-      const vacancyUrl = href.startsWith('http') ? href : `${HH_BASE}${href}`
-      log.info(`Vacancy page: ${vacancyUrl}`)
+    // --- 3. Walk several vacancies until a plain (modal) one turns up.
+    //
+    // Taking only the first result is how the earlier runs kept landing on
+    // question-forms: those vacancies are common, and one sample says nothing about
+    // the layout of the other flow. Both flows need their markup captured.
+    const links = await page
+      .locator(selectors.search.cardTitleLink[0]!)
+      .evaluateAll((els) =>
+        els.map((e) => (e as HTMLAnchorElement).href).filter(Boolean).slice(0, 12),
+      )
+      .catch(() => [] as string[])
+
+    if (links.length === 0) {
+      notes.push('Could not read vacancy links from the search results — card selectors are wrong.')
+    }
+
+    let modalFound = false
+    let questionsDumped = false
+    let visited = 0
+
+    for (const vacancyUrl of links) {
+      if (modalFound && questionsDumped) break
+      if (visited >= MAX_VACANCIES) break
+      visited++
+
+      log.info(`[${visited}] ${vacancyUrl}`)
       await page.goto(vacancyUrl, { waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(2000)
-      results.push(...(await probeSection(page, 'vacancy', selectors.vacancy)))
-      await screenshot(page, 'probe-vacancy')
-      notes.push(`Probed vacancy: ${vacancyUrl}`)
+      await page.waitForTimeout(1500)
 
-      // --- 4. The apply modal. Opened but NEVER submitted — probe is read-only.
-      const applySel = selectors.vacancy.applyButton.find(Boolean)
-      const applyBtn = page.locator(applySel!).first()
-      if ((await applyBtn.count()) > 0) {
-        log.warn('Opening the apply modal. Nothing will be submitted — probe never clicks send.')
-        await applyBtn.click().catch(() => {})
-        await page.waitForTimeout(3000)
-        results.push(...(await probeSection(page, 'apply', selectors.apply)))
-        await screenshot(page, 'probe-apply-modal')
-        await dump(page, 'apply-modal-before', selectors.apply.modal[1]!)
-
-        // The letter field does not exist until the toggle is pressed — probing for
-        // it before this click can only ever report "missing".
-        const toggle = await firstLocator(page, selectors.apply.letterToggle)
-        if (toggle) {
-          log.warn('Clicking "Добавить сопроводительное". Still nothing is submitted.')
-          await toggle.click().catch(() => {})
-          await page.waitForTimeout(1500)
-          for (const r of await probeSection(page, 'apply', selectors.apply)) {
-            const prev = results.find((x) => x.group === 'apply' && x.key === r.key)
-            if (prev && prev.status === 'missing' && r.status === 'ok') Object.assign(prev, r)
-          }
-          await screenshot(page, 'probe-apply-letter')
-          await dump(page, 'apply-modal-after', selectors.apply.modal[1]!)
-        } else {
-          notes.push('Cover-letter toggle not found — letter field cannot be revealed.')
-        }
-
-        // Stage 0.4: the letter length cap is undocumented — read it off the DOM.
-        const ta = await firstLocator(page, selectors.apply.letterTextarea)
-        if (ta) {
-          const maxlength = await ta.getAttribute('maxlength').catch(() => null)
-          notes.push(
-            maxlength
-              ? `Letter textarea maxlength = ${maxlength} — set letter.maxChars at or below this.`
-              : 'Letter textarea has no maxlength attribute — measure the cap by hand (stage 0.4).',
-          )
-        } else {
-          notes.push('Letter textarea still not found after the toggle — see apply-modal-after.html.')
-        }
-      } else {
-        notes.push('Apply button not found on this vacancy (already applied? archived? external apply?).')
+      if (!results.some((r) => r.group === 'vacancy')) {
+        results.push(...(await probeSection(page, 'vacancy', selectors.vacancy)))
+        await screenshot(page, 'probe-vacancy')
       }
-    } else {
-      notes.push('Could not read a vacancy link from the search results — card selectors are wrong.')
+
+      const applyBtn = await firstLocator(page, selectors.vacancy.applyButton)
+      if (!applyBtn) {
+        log.debug('no apply button (already applied? archived?) — next')
+        continue
+      }
+
+      await applyBtn.click().catch(() => {})
+      await page.waitForTimeout(3000)
+
+      const flow = await classifyApplyFlow(page)
+      log.info(`   flow: ${flow.kind}${'reason' in flow ? ` (${flow.reason})` : ''}`)
+
+      if (flow.kind === 'needs_human') {
+        if (!questionsDumped) {
+          // The questions page is worth capturing once: its markup is what the
+          // detector keys on, and guessing it wrong means answering forms blindly.
+          await screenshot(page, `probe-needs-human-${flow.reason}`)
+          await dump(page, `needs-human-${flow.reason}`, 'form, main, [role="dialog"]')
+          notes.push(`needs_human sample (${flow.reason}): ${vacancyUrl}`)
+          questionsDumped = true
+        }
+        continue
+      }
+
+      if (flow.kind !== 'modal') {
+        log.debug(`flow ${flow.kind} — next`)
+        continue
+      }
+
+      // --- 4. The modal. Opened, inspected, NEVER submitted.
+      modalFound = true
+      notes.push(`modal sample: ${vacancyUrl}`)
+      results.push(...(await probeSection(page, 'apply', selectors.apply)))
+      await screenshot(page, 'probe-apply-modal')
+      await dump(page, 'apply-modal-before', selectors.apply.modal[1]!)
+
+      // The resume dropdown is the one piece routing cannot work without: it decides
+      // whether a Vue vacancy actually gets the Vue resume.
+      const resumeSel = await firstLocator(page, selectors.apply.resumeSelect)
+      if (resumeSel) {
+        await resumeSel.click().catch(() => {})
+        await page.waitForTimeout(1200)
+        await screenshot(page, 'probe-resume-dropdown')
+        await dump(page, 'resume-dropdown', selectors.apply.modal[1]!)
+        const optionCount = await page
+          .locator(selectors.apply.resumeOption[1]!)
+          .count()
+          .catch(() => 0)
+        notes.push(`Resume dropdown opened; ${optionCount} option(s) visible.`)
+        await page.keyboard.press('Escape').catch(() => {})
+        await page.waitForTimeout(500)
+      } else {
+        notes.push('Resume dropdown not found — see apply-modal-before.html for its markup.')
+      }
+
+      // The letter field does not exist until the toggle is pressed.
+      const toggle = await firstLocator(page, selectors.apply.letterToggle)
+      if (toggle) {
+        log.warn('Clicking "Добавить сопроводительное". Nothing is submitted.')
+        await toggle.click().catch(() => {})
+        await page.waitForTimeout(1500)
+        for (const r of await probeSection(page, 'apply', selectors.apply)) {
+          const prev = results.find((x) => x.group === 'apply' && x.key === r.key)
+          if (prev && prev.status === 'missing' && r.status === 'ok') Object.assign(prev, r)
+        }
+        await screenshot(page, 'probe-apply-letter')
+        await dump(page, 'apply-modal-after', selectors.apply.modal[1]!)
+      } else {
+        notes.push('Cover-letter toggle not found — letter field cannot be revealed.')
+      }
+
+      const ta = await firstLocator(page, selectors.apply.letterTextarea)
+      if (ta) {
+        const maxlength = await ta.getAttribute('maxlength').catch(() => null)
+        notes.push(
+          maxlength
+            ? `Letter textarea maxlength = ${maxlength} — set letter.maxChars at or below this.`
+            : 'Letter textarea has no maxlength — measure the cap by hand (stage 0.4).',
+        )
+      }
+    }
+
+    if (!modalFound) {
+      notes.push(
+        `Walked ${visited} vacancies without hitting a plain modal flow. Either the search is ` +
+          'dominated by question-forms, or the modal selectors are wrong — check the screenshots.',
+      )
     }
   } finally {
     const report = { probedAt: new Date().toISOString(), results, notes }

@@ -39,38 +39,90 @@ export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
 /**
  * Decide what we are looking at after clicking "Откликнуться".
  *
- * Order matters. `already_applied` and `limit_exceeded` are checked before the
- * needs-human reasons: a vacancy we already answered is not a task for the human,
- * and an exhausted limit stops the whole run rather than parking one vacancy.
+ * Two rules learned the hard way:
+ *
+ *   1. Check for the modal FIRST. If a response dialog is open, this is flow A —
+ *      whatever else the page says.
+ *   2. Scope the question/test checks to the response form, never the whole page.
+ *      Vacancy descriptions routinely contain "тестовое задание" as a description of
+ *      the hiring process; matching that against the document classified perfectly
+ *      ordinary vacancies as unautomatable.
  */
 export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
+  // Hard stops first: these are about the account, not this vacancy.
   if (await firstMatch(page, selectors.apply.limitExceeded)) {
     return { kind: 'blocked', reason: 'limit_exceeded' }
   }
-  if (await firstMatch(page, selectors.apply.alreadyAppliedNotice)) {
-    return { kind: 'already_applied' }
+
+  const modalSel = await firstMatch(page, selectors.apply.modal)
+
+  if (modalSel) {
+    const modal = page.locator(modalSel).first()
+
+    if (await hasWithin(modal, selectors.apply.alreadyAppliedNotice)) {
+      return { kind: 'already_applied' }
+    }
+    // A dialog CAN carry questions — some employers ask inside the modal.
+    if (await hasWithin(modal, selectors.apply.employerQuestions)) {
+      return { kind: 'needs_human', reason: 'employer_questions' }
+    }
+    // A modal with no letter field and no resume picker is not a shape we know.
+    const hasLetter = await hasWithin(modal, selectors.apply.letterToggle)
+    const hasTextarea = await hasWithin(modal, selectors.apply.letterTextarea)
+    const hasResume = await hasWithin(modal, selectors.apply.resumeSelect)
+    if (!hasLetter && !hasTextarea && !hasResume) {
+      return { kind: 'needs_human', reason: 'unrecognised_form', detail: page.url() }
+    }
+    return { kind: 'modal' }
   }
 
-  if (await firstMatch(page, selectors.apply.testRedirect)) {
-    return { kind: 'needs_human', reason: 'test_required' }
-  }
-  if (await firstMatch(page, selectors.apply.employerQuestions)) {
-    return { kind: 'needs_human', reason: 'employer_questions' }
-  }
+  // No modal. Either hh pushed us to the response page, or we left hh entirely.
+  const onResponsePage = /\/applicant\/vacancy_response/.test(page.url())
 
-  const onModal = await firstMatch(page, selectors.apply.modal)
-  if (onModal) return { kind: 'modal' }
+  if (onResponsePage) {
+    const form = page.locator('form').first()
+    const scope = (await form.count()) > 0 ? form : page.locator('main').first()
 
-  // No modal and we were pushed to the response page: flow B, whatever the exact
-  // shape. Better to park it than to guess at a form we have never seen.
-  if (/\/applicant\/vacancy_response/.test(page.url())) {
+    if (await hasWithin(scope, selectors.apply.alreadyAppliedNotice)) {
+      return { kind: 'already_applied' }
+    }
+    if (await hasWithin(scope, selectors.apply.testRedirect)) {
+      return { kind: 'needs_human', reason: 'test_required' }
+    }
+    if (await hasWithin(scope, selectors.apply.employerQuestions)) {
+      return { kind: 'needs_human', reason: 'employer_questions' }
+    }
+    if (await hasWithin(scope, selectors.apply.relocationWarning)) {
+      return { kind: 'needs_human', reason: 'relocation' }
+    }
     return { kind: 'needs_human', reason: 'unrecognised_form', detail: page.url() }
   }
 
-  // Left hh entirely — some employers route to their own ATS.
-  if (!/(^|\.)hh\.ru$/.test(new URL(page.url()).hostname)) {
+  let hostname: string
+  try {
+    hostname = new URL(page.url()).hostname
+  } catch {
+    return { kind: 'blocked', reason: 'unknown', detail: page.url() }
+  }
+  if (!/(^|\.)hh\.ru$/.test(hostname)) {
     return { kind: 'needs_human', reason: 'external_apply', detail: page.url() }
   }
 
+  // Still on the vacancy page: the click did nothing we can see.
   return { kind: 'blocked', reason: 'unknown', detail: page.url() }
+}
+
+/** Does any candidate exist INSIDE this container? Scope is the whole point. */
+async function hasWithin(
+  container: ReturnType<Page['locator']>,
+  candidates: readonly string[],
+): Promise<boolean> {
+  for (const sel of candidates) {
+    try {
+      if ((await container.locator(sel).count()) > 0) return true
+    } catch {
+      // A bad candidate must not abort the scan.
+    }
+  }
+  return false
 }
