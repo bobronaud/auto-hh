@@ -24,6 +24,13 @@ async function main(): Promise<void> {
       await doctor()
       break
 
+    case 'collect': {
+      const cfg = loadConfig()
+      const { collect, printCollectResult } = await import('./pipeline/collect.js')
+      printCollectResult(await collect(cfg))
+      break
+    }
+
     case 'review':
       review()
       break
@@ -43,6 +50,7 @@ head-hunter-hunter
   npm run login            Log in to hh.ru by hand, once. Saves the browser profile.
   npm run doctor           Check config, database, session — without touching hh.
   npm run selectors:probe  Verify every selector against live hh.ru (research stage 0).
+  npm run collect          Scrape the search results, filter and route. Sends nothing.
   npm run review           List vacancies parked for manual handling.
   npm run resolve -- <id>  Mark one parked vacancy as handled.
 `)

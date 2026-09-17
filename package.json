@@ -15,7 +15,8 @@
     "dev": "npm-run-all --parallel server ui",
     "typecheck": "tsc --noEmit",
     "review": "tsx src/cli.ts review",
-    "resolve": "tsx src/cli.ts resolve"
+    "resolve": "tsx src/cli.ts resolve",
+    "collect": "tsx src/cli.ts collect"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
