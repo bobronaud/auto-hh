@@ -84,17 +84,27 @@ export async function detectState(page: Page): Promise<PageState> {
   // Visibility, not presence: hh keeps an invisible captcha iframe on ordinary
   // search pages, and checking for its existence halted collection on a page that
   // was showing vacancies perfectly well.
-  const captcha =
-    (await firstVisibleMatch(page, selectors.antibot.captcha)) ??
-    (await firstVisibleMatch(page, selectors.antibot.ddosGuard))
+  const captcha = await firstVisibleMatch(page, selectors.antibot.captcha)
   if (captcha) {
     log.warn(`antibot matched: ${captcha}`)
     return 'captcha'
   }
-  const blocked = await firstVisibleMatch(page, selectors.antibot.blocked)
-  if (blocked) {
-    log.warn(`blocked matched: ${blocked}`)
-    return 'blocked'
+
+  // Text signals are checked ONLY on a page that carries no hh interface. A real
+  // DDoS-Guard interstitial is a bare page; on live search results the string
+  // "DDoS-Guard" shows up as an employer's name, and matching it across the document
+  // stopped collection on a page full of vacancies.
+  if (!(await looksLikeHhPage(page))) {
+    const challenge = await firstVisibleMatch(page, selectors.antibot.ddosGuard)
+    if (challenge) {
+      log.warn(`antibot interstitial: ${challenge}`)
+      return 'captcha'
+    }
+    const blocked = await firstVisibleMatch(page, selectors.antibot.blocked)
+    if (blocked) {
+      log.warn(`blocked: ${blocked}`)
+      return 'blocked'
+    }
   }
 
   // The login URL is decisive on its own — hh redirects there whenever a session dies.
@@ -104,6 +114,11 @@ export async function detectState(page: Page): Promise<PageState> {
   if (await firstMatch(page, selectors.auth.loginForm)) return 'logged_out'
   if (await firstMatch(page, selectors.auth.loggedOut)) return 'logged_out'
   return 'unknown'
+}
+
+/** Is this an hh page at all, or an antibot interstitial wearing its URL? */
+export async function looksLikeHhPage(page: Page): Promise<boolean> {
+  return (await firstMatch(page, selectors.hhChrome)) !== null
 }
 
 export class HumanNeededError extends Error {

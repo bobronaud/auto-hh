@@ -58,9 +58,27 @@ export const selectors = {
       'iframe[src*="smartcaptcha"]',
       'iframe[src*="captcha"]',
     ],
+    /**
+     * ⚠️ Только текстовые признаки — применять ИСКЛЮЧИТЕЛЬНО на странице без
+     * интерфейса hh (см. looksLikeHhPage в browser.ts). Настоящая заглушка
+     * DDoS-Guard это голая страница; на живой выдаче «DDoS-Guard» встречается как
+     * название компании-работодателя, и поиск по документу останавливал сбор.
+     */
     ddosGuard: ['text=/DDoS-?Guard/i', 'text=/проверка вашего браузера/i'],
     blocked: ['text=/Доступ ограничен/i', 'text=/слишком много запросов/i'],
   },
+
+  /**
+   * Признаки того, что перед нами вообще страница hh, а не заглушка антибота.
+   * Хватает любого — шапка есть на всех страницах сайта.
+   */
+  hhChrome: [
+    '[data-qa="mainmenu_vacancySearch"]',
+    '[data-qa="mainmenu_applicantProfile"]',
+    'header [data-qa]',
+    '[data-qa="vacancy-serp__results"]',
+    '[data-qa="vacancy-title"]',
+  ],
 
   /** Карточки поисковой выдачи. После закрытия API это ЕДИНСТВЕННЫЙ источник вакансий. */
   search: {
