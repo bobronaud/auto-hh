@@ -152,6 +152,11 @@ export class Repo {
       .run(patch.description ?? null, bool(patch.hasTest), bool(patch.responseLetterRequired), now(), id)
   }
 
+  /** An archived vacancy drops out of every queue: it cannot be applied to. */
+  markArchived(id: number): void {
+    this.db.prepare('UPDATE vacancies SET archived = 1, detail_fetched_at = ? WHERE id = ?').run(now(), id)
+  }
+
   // ------------------------------------------------------------- deduplication
 
   /** True if this vacancy already has a successful application. */
