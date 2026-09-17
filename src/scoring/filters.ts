@@ -37,7 +37,11 @@ export function filterCard(
   cfg: Config,
   appliedIds: ReadonlySet<string>,
 ): FilterVerdict {
-  if (appliedIds.has(card.hhId)) return { keep: false, reason: 'already_applied' }
+  // Our own history, plus what hh itself shows in the card — hh also knows about
+  // applications made by hand or from the phone, which our database never saw.
+  if (appliedIds.has(card.hhId) || card.alreadyAppliedOnHh) {
+    return { keep: false, reason: 'already_applied' }
+  }
 
   // hasTest is null when the card simply did not say — only a confirmed test drops.
   if (cfg.filters.skipWithTest && card.hasTest === true) {

@@ -19,6 +19,8 @@ const log = logger('search')
 export interface ScrapedCard extends VacancyInput {
   /** Apply straight from the results list — saves opening the vacancy page. */
   canApplyFromList: boolean
+  /** hh itself says we already answered this one. Trust it over our own history. */
+  alreadyAppliedOnHh: boolean
 }
 
 /** hh vacancy id out of any of its URL shapes. */
@@ -87,6 +89,7 @@ async function scrapePage(page: Page): Promise<ScrapedCard[]> {
         salary: (salary?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
         hasTest: el.querySelector(s.test) !== null,
         canApplyFromList: el.querySelector(s.apply) !== null,
+        alreadyApplied: /Вы\s+откликнулись/i.test(el.textContent ?? ''),
       }
     })
   }, sel)
@@ -113,6 +116,7 @@ async function scrapePage(page: Page): Promise<ScrapedCard[]> {
       hasTest: r.hasTest ? true : null,
       responseLetterRequired: null,
       canApplyFromList: r.canApplyFromList,
+      alreadyAppliedOnHh: r.alreadyApplied,
       raw: r,
     })
   }

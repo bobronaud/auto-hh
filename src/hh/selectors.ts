@@ -43,23 +43,23 @@ export const selectors = {
     ],
   },
 
-  /** Антибот. Ловим, останавливаемся, зовём человека (§2.2). Никогда не решаем сами. */
+  /**
+   * Антибот. Ловим, останавливаемся, зовём человека (§2.2). Никогда не решаем сами.
+   *
+   * ⚠️ Проверять ТОЛЬКО видимость (firstVisibleMatch), не существование. hh держит
+   * невидимый iframe капчи на обычных страницах выдачи — проверка на присутствие
+   * останавливала сбор на нормальной странице с вакансиями.
+   */
   antibot: {
     captcha: [
       '[data-qa="account-captcha-picture"]',
-      'iframe[src*="captcha"]',
-      'iframe[src*="smartcaptcha"]',
       '#ddg-captcha',
       'form[action*="captcha"]',
+      'iframe[src*="smartcaptcha"]',
+      'iframe[src*="captcha"]',
     ],
-    ddosGuard: [
-      'text=/DDoS-?Guard/i',
-      'text=/проверка вашего браузера/i',
-    ],
-    blocked: [
-      'text=/Доступ ограничен/i',
-      'text=/слишком много запросов/i',
-    ],
+    ddosGuard: ['text=/DDoS-?Guard/i', 'text=/проверка вашего браузера/i'],
+    blocked: ['text=/Доступ ограничен/i', 'text=/слишком много запросов/i'],
   },
 
   /** Карточки поисковой выдачи. После закрытия API это ЕДИНСТВЕННЫЙ источник вакансий. */
@@ -87,6 +87,12 @@ export const selectors = {
     cardHasTest: ['[data-qa="vacancy-serp__vacancy-with-test"]'],
     /** Кнопка отклика прямо из выдачи (быстрый путь, минует страницу вакансии). */
     cardApplyButton: ['[data-qa="vacancy-serp__vacancy_response"]'],
+    /**
+     * «Вы откликнулись» прямо в карточке. hh знает об откликах больше нашей БД —
+     * например о сделанных руками или с телефона. Дешевле поверить ему здесь, чем
+     * открыть вакансию и упереться в отказ.
+     */
+    cardAlreadyApplied: ['[data-qa="vacancy-serp__vacancy-response-link"]', 'text=/Вы откликнулись/i'],
     /**
      * hh пагинирует ссылками на страницы, без кнопки «вперёд». Ходим по &page=N
      * напрямую (searchUrl.ts) — эти селекторы нужны только чтобы понять, есть ли
@@ -222,6 +228,39 @@ export const selectors = {
     alreadyAppliedNotice: ['text=/Вы уже откликались/i', 'text=/Вы откликнулись/i'],
   },
 } as const
+
+/**
+ * Первый кандидат, который реально ВИДЕН на странице.
+ *
+ * Отличать от firstMatch: на hh полно узлов, которые присутствуют в DOM постоянно и
+ * ничего не значат — невидимый iframe капчи, схлопнутые предупреждения. Для всего,
+ * что останавливает работу, проверять надо именно видимость.
+ */
+export async function firstVisibleMatch(
+  page: {
+    locator: (s: string) => {
+      first: () => {
+        count: () => Promise<number>
+        isVisible: () => Promise<boolean>
+        boundingBox: () => Promise<{ width: number; height: number } | null>
+      }
+    }
+  },
+  candidates: SelectorCandidates,
+): Promise<string | null> {
+  for (const s of candidates) {
+    try {
+      const loc = page.locator(s).first()
+      if ((await loc.count()) === 0) continue
+      if (!(await loc.isVisible())) continue
+      const box = await loc.boundingBox()
+      if (box && box.width > 0 && box.height > 0) return s
+    } catch {
+      // Невалидный селектор среди кандидатов не должен ронять перебор.
+    }
+  }
+  return null
+}
 
 /**
  * Первый кандидат, который реально нашёлся на странице. Возвращает null, а не

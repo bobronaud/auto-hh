@@ -1,7 +1,7 @@
 import { chromium, type BrowserContext, type Page } from 'playwright'
 import { BROWSER_PROFILE_DIR, SCREENSHOT_DIR, ensureDirs } from '../core/paths.js'
 import { logger } from '../core/logger.js'
-import { selectors, firstMatch } from './selectors.js'
+import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
 import type { Config } from '../config/schema.js'
 import { resolve } from 'node:path'
 
@@ -81,9 +81,21 @@ export type PageState = 'logged_in' | 'logged_out' | 'captcha' | 'blocked' | 'un
  * logged-in chrome and would otherwise read as logged in.
  */
 export async function detectState(page: Page): Promise<PageState> {
-  if (await firstMatch(page, selectors.antibot.captcha)) return 'captcha'
-  if (await firstMatch(page, selectors.antibot.ddosGuard)) return 'captcha'
-  if (await firstMatch(page, selectors.antibot.blocked)) return 'blocked'
+  // Visibility, not presence: hh keeps an invisible captcha iframe on ordinary
+  // search pages, and checking for its existence halted collection on a page that
+  // was showing vacancies perfectly well.
+  const captcha =
+    (await firstVisibleMatch(page, selectors.antibot.captcha)) ??
+    (await firstVisibleMatch(page, selectors.antibot.ddosGuard))
+  if (captcha) {
+    log.warn(`antibot matched: ${captcha}`)
+    return 'captcha'
+  }
+  const blocked = await firstVisibleMatch(page, selectors.antibot.blocked)
+  if (blocked) {
+    log.warn(`blocked matched: ${blocked}`)
+    return 'blocked'
+  }
 
   // The login URL is decisive on its own — hh redirects there whenever a session dies.
   if (/\/account\/login/.test(page.url())) return 'logged_out'
