@@ -104,16 +104,47 @@ const browserSchema = z.object({
   slowMoMs: z.number().int().min(0).default(0),
 })
 
+/**
+ * One resume per stack. hh's apply modal has a resume dropdown, so the same run can
+ * answer a React vacancy with the React resume and a Vue one with the Vue resume —
+ * the vacancy decides, not the config.
+ */
+const resumeSchema = z.object({
+  /** Exactly as it reads in hh's resume dropdown — this is how we pick it. */
+  title: z.string().min(1),
+  /** Short id used in logs and the UI. */
+  id: z.string().min(1),
+  /** Stack markers. A hit in the vacancy title counts far more than one in the body. */
+  match: z.array(z.string().min(1)).min(1),
+  /** Markers that disqualify this resume even when `match` hits. */
+  exclude: z.array(z.string()).default([]),
+  /** Path to the plain-text resume fed to the LLM when writing the letter. */
+  file: z.string().default(''),
+})
+
+/** What to do when no resume clearly wins. */
+const routingSchema = z.object({
+  /** Resume id used when nothing matches, or '' to skip such vacancies. */
+  fallbackResumeId: z.string().default(''),
+  /**
+   * When two resumes tie (a vacancy naming both React and Vue), skip rather than
+   * guess. Answering a Vue vacancy with a React resume is worse than not answering.
+   */
+  skipOnTie: z.boolean().default(true),
+  /** A title hit is worth this many body hits. */
+  titleWeight: z.number().min(1).default(5),
+  /** Minimum score before a resume is considered a match at all. */
+  minScore: z.number().min(1).default(1),
+})
+
 export const configSchema = z.object({
   /**
    * Master safety switch. While true nothing is ever submitted to hh — the pipeline
    * runs end to end and stops before the final click (§8, stage 6.7).
    */
   dryRun: z.boolean().default(true),
-  /** Resume title as it appears in hh's resume picker, used to select the right one. */
-  resumeTitle: z.string().default(''),
-  /** Path to a plain-text/markdown summary of your resume, fed to the LLM. */
-  resumeFile: z.string().default('resume.md'),
+  resumes: z.array(resumeSchema).min(1),
+  routing: routingSchema.default({}),
   search: searchSchema,
   filters: filtersSchema.default({}),
   limits: limitsSchema.default({}),
@@ -124,6 +155,8 @@ export const configSchema = z.object({
 })
 
 export type Config = z.infer<typeof configSchema>
+export type ResumeConfig = z.infer<typeof resumeSchema>
+export type RoutingConfig = z.infer<typeof routingSchema>
 export type SearchConfig = z.infer<typeof searchSchema>
 export type LimitsConfig = z.infer<typeof limitsSchema>
 

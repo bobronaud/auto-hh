@@ -1,26 +1,74 @@
 {
   "dryRun": true,
-  "resumeTitle": "Frontend-разработчик (React)",
-  "resumeFile": "resume.md",
-
+  "resumes": [
+    {
+      "id": "react",
+      "title": "Frontend-разработчик (React, Next.js, TypeScript)",
+      "match": [
+        "react",
+        "next.js",
+        "nextjs",
+        "redux",
+        "mobx",
+        "react native"
+      ],
+      "exclude": [],
+      "file": "resume.react.md"
+    },
+    {
+      "id": "vue",
+      "title": "Frontend-разработчик (Vue, Nuxt)",
+      "match": [
+        "vue",
+        "vue.js",
+        "vuejs",
+        "nuxt",
+        "vuex",
+        "pinia"
+      ],
+      "exclude": [],
+      "file": "resume.vue.md"
+    }
+  ],
+  "routing": {
+    "fallbackResumeId": "react",
+    "skipOnTie": true,
+    "titleWeight": 5,
+    "minScore": 1
+  },
   "search": {
-    "text": "React OR TypeScript OR Frontend",
-    "searchField": ["name"],
-    "area": ["113"],
+    "text": "React OR Vue OR TypeScript OR Frontend",
+    "searchField": [
+      "name"
+    ],
+    "area": [
+      "113"
+    ],
     "experience": "between3And6",
-    "excludedText": ["1С", "Битрикс", "PHP", "стажёр"],
-    "workFormat": ["REMOTE", "HYBRID"],
+    "excludedText": [
+      "1С",
+      "Битрикс",
+      "PHP",
+      "стажёр"
+    ],
+    "workFormat": [
+      "REMOTE",
+      "HYBRID"
+    ],
     "period": 7,
     "maxPages": 5
   },
-
   "filters": {
     "skipWithTest": true,
     "companyBlacklist": [],
-    "titleBlacklist": ["стажер", "стажёр", "trainee", "1С"],
+    "titleBlacklist": [
+      "стажер",
+      "стажёр",
+      "trainee",
+      "1С"
+    ],
     "allowNoSalary": true
   },
-
   "limits": {
     "perDay": 100,
     "perHour": 100,
@@ -29,28 +77,38 @@
     "readPauseMsMin": 1500,
     "readPauseMsMax": 4000
   },
-
   "scoring": {
-    "weights": { "vacancy": 0.3, "cvMatch": 0.5, "overall": 0.2 },
+    "weights": {
+      "vacancy": 0.3,
+      "cvMatch": 0.5,
+      "overall": 0.2
+    },
     "threshold": 65,
     "requiredKeywordHits": 1,
-    "keywords": ["react", "typescript", "javascript", "frontend", "next", "redux", "vue"]
+    "keywords": [
+      "react",
+      "vue",
+      "nuxt",
+      "next",
+      "typescript",
+      "javascript",
+      "frontend",
+      "redux",
+      "pinia"
+    ]
   },
-
   "letter": {
     "maxChars": 1800,
     "minChars": 300,
     "requireManualApproval": true,
     "language": "ru"
   },
-
   "llm": {
     "provider": "none",
     "model": "",
     "apiKeyEnv": "LLM_API_KEY",
     "maxConcurrency": 2
   },
-
   "browser": {
     "headless": false,
     "locale": "ru-RU",

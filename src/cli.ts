@@ -42,6 +42,10 @@ async function doctor(): Promise<void> {
   console.log(`\nconfig      ${configSource()}`)
   console.log(`dryRun      ${cfg.dryRun ? 'true  — nothing will ever be submitted' : 'FALSE — real applications will be sent'}`)
   console.log(`search      "${cfg.search.text}" · area ${cfg.search.area.join(',')} · ${cfg.search.maxPages} pages`)
+  for (const r of cfg.resumes) {
+    console.log(`resume      ${r.id.padEnd(6)} "${r.title}"  ← ${r.match.join(', ')}`)
+  }
+  console.log(`routing     fallback=${cfg.routing.fallbackResumeId || '(none, skip)'} · ties ${cfg.routing.skipOnTie ? 'skipped' : 'sent to fallback'}`)
   console.log(`limits      ${cfg.limits.perDay}/day, ${cfg.limits.perHour}/hour (hh ceiling: 200 per rolling 24h)`)
   console.log(`letter cap  ${cfg.letter.maxChars} chars ${cfg.letter.requireManualApproval ? '(manual approval on)' : '(NO manual approval)'}`)
   console.log(`llm         ${isConfigured(cfg) ? `${cfg.llm.provider} / ${cfg.llm.model}` : 'none — scoring and letters are not wired yet'}`)
