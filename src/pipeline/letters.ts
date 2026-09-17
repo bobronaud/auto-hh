@@ -27,6 +27,12 @@ export interface LettersResult {
  * touches hh.
  */
 export async function writeLetters(cfg: Config, limit: number): Promise<LettersResult> {
+  if (cfg.letter.mode === 'static') {
+    throw new Error(
+      'letter.mode is "static" — the same text goes with every application, so there is ' +
+        'nothing to generate. Set letter.mode to "llm" to write per-vacancy letters.',
+    )
+  }
   const repo = new Repo()
   const provider = createProvider(cfg)
 

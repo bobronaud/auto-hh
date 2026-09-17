@@ -81,16 +81,28 @@ export function batchPrompt(
       // would put one into every letter.
       const h = hints.get(t.index)
       const extra: string[] = []
+
       if (h?.salary) {
         extra.push(`   ОБЯЗАТЕЛЬНО укажи зарплатные ожидания: ${formatSalary(h.salary)}.`)
+      } else {
+        // The negative is stated explicitly, per vacancy, rather than left to be
+        // inferred from silence. In a mixed batch the model otherwise carries the
+        // topic across from the vacancies that did ask.
+        extra.push('   Про зарплату НЕ пиши: эта вакансия о ней не спрашивает.')
       }
+
       if (h?.explainNoLinks) {
         extra.push(
           '   Вакансия просит ссылки на проекты или GitHub. Ссылок нет — кратко объясни почему, ' +
             'своими словами по смыслу: ' +
             cfg.letter.noLinksExcuse,
         )
+      } else {
+        extra.push(
+          '   Про GitHub, портфолио и пет-проекты НЕ пиши ни слова: эта вакансия их не просит.',
+        )
       }
+
       return [head + desc, ...extra].join('\n')
     })
     .join('\n\n')

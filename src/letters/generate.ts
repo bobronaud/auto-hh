@@ -73,7 +73,11 @@ export async function generateLetters(
       return { index: t.index, text: '', ok: false, problems: ['не сгенерировано'] }
     }
     const text = tidyLetter(raw)
-    const v = validateLetter(text, cfg)
+    const hint = hints.get(t.index)
+    const v = validateLetter(text, cfg, {
+      salary: hint?.salary !== undefined,
+      links: hint?.explainNoLinks === true,
+    })
     if (!v.ok) {
       log.warn(`letter ${t.index}: ${v.problems.map((p) => PROBLEM_LABEL[p]).join(', ')}`)
     }

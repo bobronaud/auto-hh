@@ -69,19 +69,27 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
       const route = routeResume(cfg, { title: v.title, description: v.description })
       log.info(`→ ${v.title.slice(0, 60)}  [${route.resume.id}${route.usedFallback ? ' fallback' : ''}]`)
 
-      // Letters are written ahead of time by `npm run letters`. A vacancy with no
-      // letter is still applied to — unless hh demands one, an application without a
-      // cover letter beats no application at all.
-      const stored = repo.latestLetter(v.id)
+      // Static mode needs nothing prepared: the same text goes with every
+      // application, so there is no generation step and nothing to approve.
       let letter: string | null = null
-      if (stored) {
-        if (cfg.letter.requireManualApproval && !stored.approved_at) {
-          log.info('   letter not approved yet — skipping')
-          repo.recordApplication({ vacancyId: v.id, runId, status: 'skipped', errorCode: 'letter_unapproved' })
-          result.skipped++
-          continue
+      let stored: { id: number; text: string; approved_at: string | null } | undefined
+
+      if (cfg.letter.mode === 'static') {
+        letter = cfg.letter.text.trim() || null
+      } else {
+        // Letters are written ahead of time by `npm run letters`. A vacancy with no
+        // letter is still applied to — unless hh demands one, an application without
+        // a cover letter beats no application at all.
+        stored = repo.latestLetter(v.id)
+        if (stored) {
+          if (cfg.letter.requireManualApproval && !stored.approved_at) {
+            log.info('   letter not approved yet — skipping')
+            repo.recordApplication({ vacancyId: v.id, runId, status: 'skipped', errorCode: 'letter_unapproved' })
+            result.skipped++
+            continue
+          }
+          letter = stored.text
         }
-        letter = stored.text
       }
 
       let outcome

@@ -157,7 +157,12 @@ async function doctor(): Promise<void> {
   }
   console.log(`routing     everything not clearly matched → "${cfg.routing.fallbackResumeId}" (nothing is skipped)`)
   console.log(`limits      ${cfg.limits.perDay}/day, ${cfg.limits.perHour}/hour (hh ceiling: 200 per rolling 24h)`)
-  console.log(`letter cap  ${cfg.letter.maxChars} chars ${cfg.letter.requireManualApproval ? '(manual approval on)' : '(NO manual approval)'}`)
+  if (cfg.letter.mode === 'static') {
+    console.log(`letter      static, sent with every application:`)
+    console.log(`            "${cfg.letter.text}"`)
+  } else {
+    console.log(`letter      per-vacancy via LLM, cap ${cfg.letter.maxChars} chars ${cfg.letter.requireManualApproval ? '(manual approval on)' : '(NO manual approval)'}`)
+  }
   console.log(`llm         ${isConfigured(cfg) ? `${cfg.llm.provider} / ${cfg.llm.model}` : 'none — scoring and letters are not wired yet'}`)
 
   for (const w of limitWarnings(cfg)) console.log(`\n  ⚠ ${w}`)
@@ -169,8 +174,10 @@ async function doctor(): Promise<void> {
   console.log(`pending     ${repo.countPending()} vacancies waiting to be answered`)
   const parked = repo.countNeedsHuman()
   if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
-  const unapproved = repo.countLettersAwaitingApproval()
-  if (unapproved > 0) console.log(`letters     ${unapproved} written, awaiting approval`)
+  if (cfg.letter.mode === 'llm') {
+    const unapproved = repo.countLettersAwaitingApproval()
+    if (unapproved > 0) console.log(`letters     ${unapproved} written, awaiting approval`)
+  }
   const failed = repo.countFailed()
   if (failed > 0) console.log(`failed      ${failed} applications did not go through — npm run failures`)
 

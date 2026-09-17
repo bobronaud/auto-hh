@@ -84,6 +84,18 @@ const scoringSchema = z.object({
 
 const letterSchema = z.object({
   /**
+   * 'static' sends `text` verbatim with every application — no LLM, no approval step,
+   * nothing to review. 'llm' writes a letter per vacancy (slower, needs descriptions).
+   */
+  mode: z.enum(['static', 'llm']).default('static'),
+  /** The letter used in static mode. */
+  text: z
+    .string()
+    .default(
+      'Здравствуйте! Работал со всеми технологиями из вашей вакансии. ' +
+        'Когда удобно созвониться?',
+    ),
+  /**
    * Hard character cap. hh returns too_long_message past its own limit (§4.2), but
    * the exact number is NOT documented anywhere — measure it in the UI (recon 0.4)
    * and set this below what you measure.

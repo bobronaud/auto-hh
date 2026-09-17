@@ -90,10 +90,19 @@
     ]
   },
   "letter": {
+    "mode": "static",
+    "text": "Здравствуйте! Работал со всеми технологиями из вашей вакансии. Когда удобно созвониться?",
     "maxChars": 1800,
-    "minChars": 300,
+    "minChars": 0,
     "requireManualApproval": true,
-    "language": "ru"
+    "language": "ru",
+    "salaryByGrade": {
+      "junior": 150000,
+      "middle": 200000,
+      "senior": 250000
+    },
+    "noLinksExcuse": "",
+    "batchSize": 10
   },
   "llm": {
     "provider": "claude-cli",

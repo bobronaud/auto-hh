@@ -17,6 +17,8 @@ export type LetterProblem =
   | 'markdown'
   | 'placeholder'
   | 'meta_commentary'
+  | 'unsolicited_salary'
+  | 'unsolicited_links'
 
 export const PROBLEM_LABEL: Record<LetterProblem, string> = {
   too_long: 'длиннее допустимого',
@@ -25,7 +27,21 @@ export const PROBLEM_LABEL: Record<LetterProblem, string> = {
   markdown: 'содержит markdown-разметку',
   placeholder: 'содержит незаполненный плейсхолдер',
   meta_commentary: 'содержит служебный текст модели',
+  unsolicited_salary: 'называет зарплату, хотя вакансия о ней не спрашивала',
+  unsolicited_links: 'оправдывается за отсутствие ссылок, хотя их не просили',
 }
+
+/** What this particular vacancy actually asked the letter to contain. */
+export interface AskedFor {
+  salary: boolean
+  links: boolean
+}
+
+/** A salary figure: "200 000 ₽", "200000 руб". */
+const SALARY_FIGURE = /\d{3}[\s\u00a0\u202f]?\d{3}\s*(?:₽|руб|р\.)/iu
+
+/** Talking about GitHub, a portfolio, or the absence of pet projects. */
+const LINKS_TOPIC = /github|гитхаб|портфолио|portfolio|пет[-\s]?проект|pet[-\s]?проект|gitlab/iu
 
 export interface Validation {
   ok: boolean
@@ -47,7 +63,7 @@ const META =
  */
 const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
 
-export function validateLetter(text: string, cfg: Config): Validation {
+export function validateLetter(text: string, cfg: Config, asked?: AskedFor): Validation {
   const problems: LetterProblem[] = []
   const trimmed = text.trim()
 
@@ -57,6 +73,14 @@ export function validateLetter(text: string, cfg: Config): Validation {
   if (MARKDOWN.test(trimmed)) problems.push('markdown')
   if (PLACEHOLDER.test(trimmed)) problems.push('placeholder')
   if (META.test(trimmed)) problems.push('meta_commentary')
+
+  // Batch contamination: with ten vacancies in one prompt, a topic raised by one of
+  // them leaks into its neighbours. Volunteering a salary nobody asked for weakens
+  // the letter, and apologising for missing links draws attention to their absence.
+  if (asked) {
+    if (!asked.salary && SALARY_FIGURE.test(trimmed)) problems.push('unsolicited_salary')
+    if (!asked.links && LINKS_TOPIC.test(trimmed)) problems.push('unsolicited_links')
+  }
 
   return { ok: problems.length === 0, problems }
 }
