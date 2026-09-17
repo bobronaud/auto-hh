@@ -1,0 +1,321 @@
+import type { Database } from 'better-sqlite3'
+import { getDb } from './index.js'
+
+export interface VacancyInput {
+  hhId: string
+  title: string
+  company?: string | null
+  url: string
+  area?: string | null
+  salaryFrom?: number | null
+  salaryTo?: number | null
+  salaryCurrency?: string | null
+  hasTest?: boolean | null
+  responseLetterRequired?: boolean | null
+  archived?: boolean
+  snippet?: string | null
+  raw?: unknown
+}
+
+export interface VacancyRow {
+  id: number
+  hh_id: string
+  title: string
+  company: string | null
+  url: string
+  area: string | null
+  salary_from: number | null
+  salary_to: number | null
+  salary_currency: string | null
+  has_test: number | null
+  response_letter_required: number | null
+  archived: number
+  snippet: string | null
+  description: string | null
+  found_at: string
+  detail_fetched_at: string | null
+}
+
+const now = () => new Date().toISOString()
+const bool = (v: boolean | null | undefined): number | null =>
+  v === null || v === undefined ? null : v ? 1 : 0
+
+export class Repo {
+  constructor(private readonly db: Database = getDb()) {}
+
+  // ---------------------------------------------------------------- vacancies
+
+  /**
+   * Insert or refresh. Existing rows keep found_at and never lose a known flag to a
+   * later NULL — a search-card scrape knows less than a detail-page scrape (§1.4).
+   */
+  upsertVacancy(v: VacancyInput): number {
+    const stmt = this.db.prepare(`
+      INSERT INTO vacancies (hh_id, title, company, url, area, salary_from, salary_to,
+                             salary_currency, has_test, response_letter_required,
+                             archived, snippet, raw_json, found_at)
+      VALUES (@hh_id, @title, @company, @url, @area, @salary_from, @salary_to,
+              @salary_currency, @has_test, @response_letter_required,
+              @archived, @snippet, @raw_json, @found_at)
+      ON CONFLICT (hh_id) DO UPDATE SET
+        title    = excluded.title,
+        company  = COALESCE(excluded.company, vacancies.company),
+        url      = excluded.url,
+        area     = COALESCE(excluded.area, vacancies.area),
+        salary_from     = COALESCE(excluded.salary_from, vacancies.salary_from),
+        salary_to       = COALESCE(excluded.salary_to, vacancies.salary_to),
+        salary_currency = COALESCE(excluded.salary_currency, vacancies.salary_currency),
+        has_test                 = COALESCE(excluded.has_test, vacancies.has_test),
+        response_letter_required = COALESCE(excluded.response_letter_required,
+                                            vacancies.response_letter_required),
+        archived = excluded.archived,
+        snippet  = COALESCE(excluded.snippet, vacancies.snippet)
+      RETURNING id
+    `)
+    const row = stmt.get({
+      hh_id: v.hhId,
+      title: v.title,
+      company: v.company ?? null,
+      url: v.url,
+      area: v.area ?? null,
+      salary_from: v.salaryFrom ?? null,
+      salary_to: v.salaryTo ?? null,
+      salary_currency: v.salaryCurrency ?? null,
+      has_test: bool(v.hasTest),
+      response_letter_required: bool(v.responseLetterRequired),
+      archived: v.archived ? 1 : 0,
+      snippet: v.snippet ?? null,
+      raw_json: v.raw ? JSON.stringify(v.raw) : null,
+      found_at: now(),
+    }) as { id: number }
+    return row.id
+  }
+
+  getVacancyByHhId(hhId: string): VacancyRow | undefined {
+    return this.db.prepare('SELECT * FROM vacancies WHERE hh_id = ?').get(hhId) as
+      | VacancyRow
+      | undefined
+  }
+
+  setVacancyDetail(
+    id: number,
+    patch: { description?: string; hasTest?: boolean | null; responseLetterRequired?: boolean | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE vacancies SET
+           description = COALESCE(?, description),
+           has_test = COALESCE(?, has_test),
+           response_letter_required = COALESCE(?, response_letter_required),
+           detail_fetched_at = ?
+         WHERE id = ?`,
+      )
+      .run(patch.description ?? null, bool(patch.hasTest), bool(patch.responseLetterRequired), now(), id)
+  }
+
+  // ------------------------------------------------------------- deduplication
+
+  /** True if this vacancy already has a successful application. */
+  hasApplied(vacancyId: number): boolean {
+    const row = this.db
+      .prepare(`SELECT 1 FROM applications WHERE vacancy_id = ? AND status = 'applied' LIMIT 1`)
+      .get(vacancyId)
+    return row !== undefined
+  }
+
+  /** hh_ids already applied to, for bulk filtering a fresh scrape. */
+  appliedHhIds(): Set<string> {
+    const rows = this.db
+      .prepare(
+        `SELECT v.hh_id FROM applications a
+         JOIN vacancies v ON v.id = a.vacancy_id
+         WHERE a.status = 'applied'`,
+      )
+      .all() as { hh_id: string }[]
+    return new Set(rows.map((r) => r.hh_id))
+  }
+
+  // -------------------------------------------------------------- rate limits
+
+  /**
+   * Applications sent within the last `hours`, counted over a ROLLING window.
+   *
+   * This is the whole point: hh's 200-per-24h is a sliding window, not a calendar
+   * day (RESEARCH §5.1, axisrow/hhru#1142). A midnight-reset counter drifts out of
+   * sync with hh and starts eating limit_exceeded errors.
+   */
+  countAppliedWithin(hours: number): number {
+    const since = new Date(Date.now() - hours * 3600_000).toISOString()
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM applications
+         WHERE status = 'applied' AND applied_at IS NOT NULL AND applied_at >= ?`,
+      )
+      .get(since) as { n: number }
+    return row.n
+  }
+
+  /** Oldest application inside the window — tells the UI when a slot frees up. */
+  oldestAppliedWithin(hours: number): string | null {
+    const since = new Date(Date.now() - hours * 3600_000).toISOString()
+    const row = this.db
+      .prepare(
+        `SELECT MIN(applied_at) AS t FROM applications
+         WHERE status = 'applied' AND applied_at IS NOT NULL AND applied_at >= ?`,
+      )
+      .get(since) as { t: string | null }
+    return row.t
+  }
+
+  // ------------------------------------------------------------------- scores
+
+  saveScore(s: {
+    vacancyId: number
+    vacancy?: number | null
+    cvMatch?: number | null
+    overall?: number | null
+    weighted: number
+    reason?: string | null
+    model?: string | null
+    promptVersion?: string | null
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO scores (vacancy_id, score_vacancy, score_cv_match, score_overall,
+                             weighted, reason, model, prompt_version, scored_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (vacancy_id) DO UPDATE SET
+           score_vacancy = excluded.score_vacancy,
+           score_cv_match = excluded.score_cv_match,
+           score_overall = excluded.score_overall,
+           weighted = excluded.weighted,
+           reason = excluded.reason,
+           model = excluded.model,
+           prompt_version = excluded.prompt_version,
+           scored_at = excluded.scored_at`,
+      )
+      .run(
+        s.vacancyId,
+        s.vacancy ?? null,
+        s.cvMatch ?? null,
+        s.overall ?? null,
+        s.weighted,
+        s.reason ?? null,
+        s.model ?? null,
+        s.promptVersion ?? null,
+        now(),
+      )
+  }
+
+  /** Vacancies with no score yet — the LLM work queue. */
+  unscoredVacancies(limit = 100): VacancyRow[] {
+    return this.db
+      .prepare(
+        `SELECT v.* FROM vacancies v
+         LEFT JOIN scores s ON s.vacancy_id = v.id
+         WHERE s.vacancy_id IS NULL AND v.archived = 0
+         ORDER BY v.found_at DESC LIMIT ?`,
+      )
+      .all(limit) as VacancyRow[]
+  }
+
+  // ------------------------------------------------------------------ letters
+
+  saveLetter(l: {
+    vacancyId: number
+    text: string
+    model?: string | null
+    promptVersion?: string | null
+  }): number {
+    const row = this.db
+      .prepare(
+        `INSERT INTO letters (vacancy_id, text, chars, model, prompt_version, created_at)
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+      )
+      .get(l.vacancyId, l.text, l.text.length, l.model ?? null, l.promptVersion ?? null, now()) as {
+      id: number
+    }
+    return row.id
+  }
+
+  approveLetter(letterId: number, text?: string): void {
+    if (text !== undefined) {
+      this.db
+        .prepare('UPDATE letters SET text = ?, chars = ?, edited = 1, approved_at = ? WHERE id = ?')
+        .run(text, text.length, now(), letterId)
+    } else {
+      this.db.prepare('UPDATE letters SET approved_at = ? WHERE id = ?').run(now(), letterId)
+    }
+  }
+
+  // ------------------------------------------------------------- applications
+
+  recordApplication(a: {
+    vacancyId: number
+    runId?: number | null
+    letterId?: number | null
+    status: 'planned' | 'applied' | 'skipped' | 'failed' | 'dry_run'
+    errorCode?: string | null
+    errorMessage?: string | null
+    screenshotPath?: string | null
+  }): number {
+    const row = this.db
+      .prepare(
+        `INSERT INTO applications (vacancy_id, run_id, letter_id, status, error_code,
+                                   error_message, screenshot_path, applied_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      )
+      .get(
+        a.vacancyId,
+        a.runId ?? null,
+        a.letterId ?? null,
+        a.status,
+        a.errorCode ?? null,
+        a.errorMessage ?? null,
+        a.screenshotPath ?? null,
+        a.status === 'applied' ? now() : null,
+        now(),
+      ) as { id: number }
+    return row.id
+  }
+
+  // ---------------------------------------------------------------------- runs
+
+  startRun(mode: string): number {
+    const row = this.db
+      .prepare('INSERT INTO runs (mode, started_at) VALUES (?, ?) RETURNING id')
+      .get(mode, now()) as { id: number }
+    return row.id
+  }
+
+  finishRun(
+    runId: number,
+    counts: { planned: number; applied: number; skipped: number; failed: number },
+    stopReason?: string,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE runs SET finished_at = ?, planned = ?, applied = ?, skipped = ?,
+                         failed = ?, stop_reason = ? WHERE id = ?`,
+      )
+      .run(now(), counts.planned, counts.applied, counts.skipped, counts.failed, stopReason ?? null, runId)
+  }
+
+  // ------------------------------------------------------------------------ kv
+
+  kvGet(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined
+    return row?.value ?? null
+  }
+
+  kvSet(key: string, value: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(key, value, now())
+  }
+}

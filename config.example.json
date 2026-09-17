@@ -1,0 +1,61 @@
+{
+  "dryRun": true,
+  "resumeTitle": "Frontend-разработчик (React)",
+  "resumeFile": "resume.md",
+
+  "search": {
+    "text": "React OR TypeScript OR Frontend",
+    "searchField": ["name"],
+    "area": ["113"],
+    "experience": "between3And6",
+    "excludedText": ["1С", "Битрикс", "PHP", "стажёр"],
+    "workFormat": ["REMOTE", "HYBRID"],
+    "period": 7,
+    "maxPages": 5
+  },
+
+  "filters": {
+    "skipWithTest": true,
+    "companyBlacklist": ["Аутстафф", "Кадровое агентство"],
+    "titleBlacklist": ["стажер", "стажёр", "Junior", "1С"],
+    "allowNoSalary": true
+  },
+
+  "limits": {
+    "perDay": 30,
+    "perHour": 5,
+    "delayMs": 800,
+    "delayJitterMs": 400,
+    "readPauseMsMin": 1500,
+    "readPauseMsMax": 4000
+  },
+
+  "scoring": {
+    "weights": { "vacancy": 0.3, "cvMatch": 0.5, "overall": 0.2 },
+    "threshold": 65,
+    "requiredKeywordHits": 1,
+    "keywords": ["react", "typescript", "javascript", "frontend", "next", "redux", "vue"]
+  },
+
+  "letter": {
+    "maxChars": 1800,
+    "minChars": 300,
+    "requireManualApproval": true,
+    "language": "ru"
+  },
+
+  "llm": {
+    "provider": "none",
+    "model": "",
+    "apiKeyEnv": "LLM_API_KEY",
+    "maxConcurrency": 2
+  },
+
+  "browser": {
+    "headless": false,
+    "locale": "ru-RU",
+    "timezone": "Europe/Moscow",
+    "manualActionTimeoutMs": 300000,
+    "slowMoMs": 0
+  }
+}
