@@ -16,6 +16,8 @@ export function buildSearchUrl(search: SearchConfig, page = 0): string {
 
   p.set('text', search.text)
   for (const f of search.searchField) p.append('search_field', f)
+  // No area param at all when none are configured — passing an empty value would
+  // make hh fall back to the profile's own region instead of searching everywhere.
   for (const a of search.area) p.append('area', a)
   for (const w of search.workFormat) p.append('work_format', w)
 

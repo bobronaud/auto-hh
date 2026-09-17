@@ -10,8 +10,11 @@ const searchSchema = z.object({
   text: z.string().min(1),
   /** hh search_field: name | company_name | description */
   searchField: z.array(z.enum(['name', 'company_name', 'description'])).default(['name']),
-  /** hh area id. 113 = Russia, 1 = Moscow, 2 = Saint Petersburg. */
-  area: z.array(z.string()).default(['113']),
+  /**
+   * hh area ids (113 = Russia, 1 = Moscow, 2 = SPb). Empty — and that is the default —
+   * means no region filter at all: hh then searches everywhere it has vacancies.
+   */
+  area: z.array(z.string()).default([]),
   experience: z.enum(['noExperience', 'between1And3', 'between3And6', 'moreThan6']).optional(),
   /** Words that disqualify a vacancy outright; passed to hh as excluded_text. */
   excludedText: z.array(z.string()).default([]),

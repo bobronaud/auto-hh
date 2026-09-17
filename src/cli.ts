@@ -84,7 +84,7 @@ async function doctor(): Promise<void> {
   const cfg = loadConfig()
   console.log(`\nconfig      ${configSource()}`)
   console.log(`dryRun      ${cfg.dryRun ? 'true  — nothing will ever be submitted' : 'FALSE — real applications will be sent'}`)
-  console.log(`search      "${cfg.search.text}" · area ${cfg.search.area.join(',')} · ${cfg.search.maxPages} pages`)
+  console.log(`search      "${cfg.search.text}" · ${cfg.search.area.length ? `area ${cfg.search.area.join(',')}` : 'any region'} · ${cfg.search.maxPages} pages`)
   for (const r of cfg.resumes) {
     console.log(`resume      ${r.id.padEnd(6)} "${r.title}"  ← ${r.match.join(', ')}`)
   }

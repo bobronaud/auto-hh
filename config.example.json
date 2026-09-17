@@ -40,9 +40,7 @@
     "searchField": [
       "name"
     ],
-    "area": [
-      "113"
-    ],
+    "area": [],
     "excludedText": [],
     "workFormat": [],
     "period": 30,
