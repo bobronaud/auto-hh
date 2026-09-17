@@ -53,7 +53,6 @@ export async function generateLetters(
   const result = await provider.complete({
     system: systemPrompt(cfg),
     prompt: batchPrompt(targets, resume, resumeText, cfg),
-    json: true,
   })
 
   const parsed = parseBatch(result.text, targets.length)
@@ -73,40 +72,50 @@ export async function generateLetters(
 }
 
 /**
- * Pull the JSON array out of the response.
+ * Split the response on the letter delimiters.
  *
- * Models wrap JSON in prose or fences no matter how firmly asked not to, so locate the
- * array by its brackets rather than trusting the whole string to parse.
+ * Deliberately forgiving about everything except the delimiter itself: the model may
+ * add a preamble, vary the spacing, or wrap the whole thing in a code fence, and none
+ * of that should cost a batch of letters.
  */
 function parseBatch(text: string, expected: number): Map<number, string> {
   const out = new Map<number, string>()
 
-  const start = text.indexOf('[')
-  const end = text.lastIndexOf(']')
-  if (start === -1 || end <= start) {
-    log.error('LLM response contained no JSON array')
+  // ###ПИСЬМО 3### with any spacing, optionally fenced or bolded by the model.
+  const pattern = /#{2,}\s*ПИСЬМО\s*(\d+)\s*#{2,}/gi
+  const marks: Array<{ index: number; at: number; end: number }> = []
+
+  for (const m of text.matchAll(pattern)) {
+    const n = Number(m[1])
+    if (Number.isInteger(n)) marks.push({ index: n, at: m.index!, end: m.index! + m[0].length })
+  }
+
+  if (marks.length === 0) {
+    // A single expected letter needs no delimiter to be unambiguous.
+    if (expected === 1 && text.trim()) {
+      out.set(1, stripFences(text))
+      return out
+    }
+    log.error('response contained no letter delimiters')
     return out
   }
 
-  let items: unknown
-  try {
-    items = JSON.parse(text.slice(start, end + 1))
-  } catch (e) {
-    log.error(`could not parse the JSON array: ${(e as Error).message}`)
-    return out
-  }
-  if (!Array.isArray(items)) return out
-
-  for (const item of items) {
-    if (typeof item !== 'object' || item === null) continue
-    const rec = item as { i?: unknown; letter?: unknown }
-    const i = typeof rec.i === 'number' ? rec.i : Number(rec.i)
-    if (!Number.isInteger(i) || typeof rec.letter !== 'string') continue
-    out.set(i, rec.letter)
+  for (let i = 0; i < marks.length; i++) {
+    const mark = marks[i]!
+    const until = i + 1 < marks.length ? marks[i + 1]!.at : text.length
+    const body = stripFences(text.slice(mark.end, until))
+    if (body) out.set(mark.index, body)
   }
 
   if (out.size !== expected) {
     log.warn(`asked for ${expected} letters, parsed ${out.size}`)
   }
   return out
+}
+
+function stripFences(s: string): string {
+  return s
+    .replace(/^\s*```[a-z]*\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim()
 }

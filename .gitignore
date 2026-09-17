@@ -2,7 +2,7 @@ node_modules/
 data/
 config.json
 resume.*.md
-!resume.*.example.md
+resume/
 .env
 *.log
 dist/

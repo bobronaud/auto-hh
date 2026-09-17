@@ -1,7 +1,17 @@
 import type { Config, ResumeConfig } from '../config/schema.js'
 
 /** Bump when the wording changes, so stored letters stay attributable. */
-export const PROMPT_VERSION = 'v1'
+export const PROMPT_VERSION = 'v2'
+
+/**
+ * Letters are returned between plain-text delimiters, not as JSON.
+ *
+ * JSON was the obvious first choice and the wrong one: letters have paragraphs, a raw
+ * newline inside a JSON string literal is invalid JSON, and the whole batch failed to
+ * parse. Asking the model to emit \n escapes just moves the problem onto it. With
+ * delimiters, line breaks are ordinary text and there is nothing to escape.
+ */
+export const LETTER_DELIMITER = (n: number) => `###ПИСЬМО ${n}###`
 
 export interface LetterTarget {
   index: number
@@ -60,8 +70,15 @@ export function batchPrompt(
     `Напиши ${targets.length} писем — по одному на каждую вакансию ниже.`,
     `Каждое письмо не длиннее ${cfg.letter.maxChars} символов.`,
     '',
-    'Верни СТРОГО JSON-массив и ничего кроме него:',
-    '[{"i": <номер вакансии>, "letter": "<текст письма>"}]',
+    'Формат ответа — строго такой, без JSON и без пояснений:',
+    '',
+    LETTER_DELIMITER(1),
+    'текст первого письма',
+    '',
+    LETTER_DELIMITER(2),
+    'текст второго письма',
+    '',
+    'Разделитель обязателен перед каждым письмом. Номер совпадает с номером вакансии.',
     '',
     'Вакансии:',
     vacancies,
