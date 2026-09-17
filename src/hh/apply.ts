@@ -174,9 +174,30 @@ async function writeLetter(
     return { ok: false, errorCode: 'no_letter_field', message: 'cover-letter field never appeared' }
   }
 
-  // Typed, not filled: fill() sets the value in one shot, which some React forms do
-  // not register at all, and which looks nothing like a human writing.
-  await page.locator(areaSel).first().click()
-  await page.locator(areaSel).first().pressSequentially(letter, { delay: 12 })
+  // Pasted, not typed. fill() dispatches a proper input event, so React registers it,
+  // and pasting a prepared letter is what a person actually does anyway. Typing 1500
+  // characters would cost ~18s per application and buy nothing.
+  const field = page.locator(areaSel).first()
+  await field.click()
+  await field.fill(letter)
+
+  // Read it back instead of trusting either method. If the form did swallow the
+  // value, fall back to key-by-key entry rather than submitting an empty letter —
+  // hh rejects those outright (empty_message, §1.3).
+  const landed = await field.inputValue().catch(() => '')
+  if (landed.trim() !== letter.trim()) {
+    log.warn(`fill() left ${landed.length}/${letter.length} chars — retyping`)
+    await field.fill('')
+    await field.pressSequentially(letter, { delay: 8 })
+
+    const retry = await field.inputValue().catch(() => '')
+    if (retry.trim() !== letter.trim()) {
+      return {
+        ok: false,
+        errorCode: 'letter_not_entered',
+        message: `field holds ${retry.length} of ${letter.length} chars after two attempts`,
+      }
+    }
+  }
   return { ok: true }
 }
