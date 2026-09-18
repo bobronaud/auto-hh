@@ -201,7 +201,7 @@ export async function probe(cfg: Config): Promise<void> {
           // The questions page is worth capturing once: its markup is what the
           // detector keys on, and guessing it wrong means answering forms blindly.
           await screenshot(page, `probe-needs-human-${flow.reason}`)
-          await dump(page, `needs-human-${flow.reason}`, 'form, main, [role="dialog"]')
+          await dump(page, `needs-human-${flow.reason}`, 'main, [role="dialog"], form')
           notes.push(`needs_human sample (${flow.reason}): ${vacancyUrl}`)
           questionsDumped = true
         }

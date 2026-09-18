@@ -33,10 +33,24 @@ export async function writeLetters(cfg: Config, limit: number): Promise<LettersR
         'nothing to generate. Set letter.mode to "llm" to write per-vacancy letters.',
     )
   }
+  return writeLettersFor(cfg, new Repo().vacanciesNeedingLetters(limit))
+}
+
+/**
+ * The same work for an exact list of vacancies.
+ *
+ * This is what an apply run calls: it has already chosen the vacancies it is about to
+ * answer, and letters must be written for THOSE, not for whatever the letter queue
+ * would have picked on its own. The two lists are ordered the same way but drift apart
+ * as soon as some of the vacancies already have a letter.
+ */
+export async function writeLettersFor(
+  cfg: Config,
+  pending: readonly VacancyRow[],
+): Promise<LettersResult> {
   const repo = new Repo()
   const provider = createProvider(cfg)
 
-  const pending = repo.vacanciesNeedingLetters(limit)
   const result: LettersResult = {
     requested: pending.length,
     detailsFetched: 0,

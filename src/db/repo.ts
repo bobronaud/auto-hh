@@ -71,6 +71,44 @@ export interface NeedsHumanRow {
   resolved_at: string | null
 }
 
+export interface HistoryRow {
+  application_id: number
+  vacancy_id: number
+  hh_id: string
+  title: string
+  company: string | null
+  url: string
+  status: ApplicationStatus
+  error_code: string | null
+  error_message: string | null
+  needs_human_reason: string | null
+  screenshot_path: string | null
+  applied_at: string | null
+  created_at: string
+  resolved_at: string | null
+  /** The letter that actually went with this application; null in static mode. */
+  letter_text: string | null
+}
+
+/** A queue row with the letter that is going to be sent with it, if there is one. */
+export interface PendingRow extends VacancyRow {
+  letter_id: number | null
+  letter_text: string | null
+  letter_approved_at: string | null
+}
+
+export interface RunRow {
+  id: number
+  mode: string
+  started_at: string
+  finished_at: string | null
+  planned: number
+  applied: number
+  skipped: number
+  failed: number
+  stop_reason: string | null
+}
+
 const now = () => new Date().toISOString()
 const bool = (v: boolean | null | undefined): number | null =>
   v === null || v === undefined ? null : v ? 1 : 0
@@ -491,6 +529,83 @@ export class Repo {
       .prepare(`SELECT COUNT(*) AS n FROM applications WHERE status = 'needs_human' AND resolved_at IS NULL`)
       .get() as { n: number }
     return row.n
+  }
+
+  // ------------------------------------------------------------------- history
+
+  /**
+   * Every application ever recorded, newest first — the UI history tab.
+   *
+   * Deliberately not filtered down to 'applied': a dry run, a parked vacancy and a
+   * failure are all part of what happened, and the screenshot is what makes any of
+   * them checkable after the fact (§7).
+   *
+   * The letter is joined in rather than fetched per row: in llm mode every application
+   * carries a different text, and "what did I actually send this employer" is a
+   * question asked while scanning the list. A LEFT JOIN because static mode stores no
+   * letter at all — the text lives in the config, not in the row.
+   */
+  applicationHistory(opts: { limit?: number; status?: ApplicationStatus } = {}): HistoryRow[] {
+    const where = opts.status ? 'WHERE a.status = ?' : ''
+    const stmt = this.db.prepare(
+      `SELECT a.id AS application_id, v.id AS vacancy_id, v.hh_id, v.title, v.company,
+              v.url, a.status, a.error_code, a.error_message, a.needs_human_reason,
+              a.screenshot_path, a.applied_at, a.created_at, a.resolved_at,
+              l.text AS letter_text
+       FROM applications a
+       JOIN vacancies v ON v.id = a.vacancy_id
+       LEFT JOIN letters l ON l.id = a.letter_id
+       ${where}
+       ORDER BY a.created_at DESC
+       LIMIT ?`,
+    )
+    const limit = opts.limit ?? 200
+    return (opts.status ? stmt.all(opts.status, limit) : stmt.all(limit)) as HistoryRow[]
+  }
+
+  /**
+   * One page of the pending queue, in the exact order `pendingVacancies` would hand
+   * them to a run — the UI has to show what is actually next, not a prettier sort.
+   *
+   * The letter comes along because this is the only place it can be read before it is
+   * sent: the history tab shows what already went out, which is too late to change
+   * anything. Newest letter per vacancy — a regenerated one supersedes its predecessor
+   * exactly as `latestLetter` (and therefore the apply run) sees it.
+   */
+  pendingPage(limit = 50, offset = 0): PendingRow[] {
+    return this.db
+      .prepare(
+        `SELECT v.*, l.id AS letter_id, l.text AS letter_text, l.approved_at AS letter_approved_at
+         FROM vacancies v
+         LEFT JOIN letters l
+           ON l.id = (SELECT id FROM letters WHERE vacancy_id = v.id ORDER BY id DESC LIMIT 1)
+         WHERE v.archived = 0
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+         ORDER BY
+           CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,
+           CAST(v.hh_id AS INTEGER) DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(limit, offset) as PendingRow[]
+  }
+
+  countApplicationsByStatus(): Record<string, number> {
+    const rows = this.db
+      .prepare('SELECT status, COUNT(*) AS n FROM applications GROUP BY status')
+      .all() as Array<{ status: string; n: number }>
+    return Object.fromEntries(rows.map((r) => [r.status, r.n]))
+  }
+
+  /** Total vacancies stored, answered or not — the size of what collect has built. */
+  countVacancies(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM vacancies').get() as { n: number }
+    return row.n
+  }
+
+  recentRuns(limit = 20): RunRow[] {
+    return this.db
+      .prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ?')
+      .all(limit) as RunRow[]
   }
 
   // ---------------------------------------------------------------------- runs

@@ -1,6 +1,6 @@
 import type { Page } from 'playwright'
 import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
-import { classifyApplyFlow, type NeedsHumanReason } from './applyFlow.js'
+import { classifyApplyFlow, confirmOtherCountry, type NeedsHumanReason } from './applyFlow.js'
 import { selectResume } from './resumePicker.js'
 import { goto, screenshot, pause, randomBetween } from './browser.js'
 import { logger } from '../core/logger.js'
@@ -49,6 +49,12 @@ export async function applyToVacancy(
 
   await page.locator(applySel).first().click()
   await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+
+  // Предупреждение о вакансии в другой стране стоит ПЕРЕД формой отклика и формой
+  // не является. Подтверждаем и ждём то, что откроется следом.
+  if (await confirmOtherCountry(page)) {
+    await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+  }
 
   const flow = await classifyApplyFlow(page)
 

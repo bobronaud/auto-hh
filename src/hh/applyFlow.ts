@@ -1,5 +1,8 @@
 import type { Page } from 'playwright'
-import { selectors, firstMatch } from './selectors.js'
+import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
+import { logger } from '../core/logger.js'
+
+const log = logger('apply')
 
 /**
  * hh has two apply flows, confirmed by probing live vacancies:
@@ -36,6 +39,27 @@ export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
   external_apply: 'Отклик на стороннем сайте',
   resume_hidden: 'Резюме скрыто от работодателей',
   unrecognised_form: 'Незнакомая форма отклика',
+}
+
+/**
+ * Пройти предупреждение «Вы откликаетесь на вакансию в другой стране».
+ *
+ * hh вклинивает его между кнопкой «Откликнуться» и формой отклика: диалог с двумя
+ * кнопками, «Все равно откликнуться» и «Отменить». Подтверждаем всегда — цель
+ * максимум откликов, а отказ работодателя по географии стоит дешевле, чем
+ * неотправленный отклик. После подтверждения идёт обычный поток: либо модалка,
+ * либо страница /applicant/vacancy_response.
+ *
+ * Возвращает true, если кнопку нажали, — вызывающий даёт странице время на
+ * следующий шаг. Проверяем ВИДИМОСТЬ, не существование, и логируем сработавший
+ * селектор: детектор без имени селектора неотлаживаем.
+ */
+export async function confirmOtherCountry(page: Page): Promise<boolean> {
+  const sel = await firstVisibleMatch(page, selectors.apply.confirmOtherCountry)
+  if (!sel) return false
+  log.info(`   другая страна — подтверждаем отклик (${sel})`)
+  await page.locator(sel).first().click()
+  return true
 }
 
 /**
@@ -87,8 +111,22 @@ export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
   const onResponsePage = /\/applicant\/vacancy_response/.test(page.url())
 
   if (onResponsePage) {
-    const form = page.locator('form').first()
-    const scope = (await form.count()) > 0 ? form : page.locator('main').first()
+    // NOT page.locator('form').first(): the first form in the DOM is hh's header
+    // search (action="/search/vacancy"). Scoping the checks to it found nothing, and
+    // every page of employer questions fell through to 'unrecognised_form' — the
+    // bucket meant for shapes we do not know. The response form lives inside main.
+    //
+    // main is a safe fallback here, unlike on a vacancy page: the response page
+    // carries no vacancy description, which is the text that made narrow scoping a
+    // rule in the first place.
+    const responseForm = page.locator('main form').first()
+    const main = page.locator('main').first()
+    const scope =
+      (await responseForm.count()) > 0
+        ? responseForm
+        : (await main.count()) > 0
+          ? main
+          : page.locator('body')
 
     if (await hasWithin(scope, selectors.apply.alreadyAppliedNotice)) {
       return { kind: 'already_applied' }

@@ -103,10 +103,17 @@ const letterSchema = z.object({
    * attribute, which is why the research left it open. The default here is far lower
    * on purpose: a 10000-character cover letter does not get read.
    */
-  maxChars: z.number().int().min(100).max(10_000).default(1800),
+  maxChars: z.number().int().min(100).max(10_000).default(1000),
   minChars: z.number().int().min(0).default(300),
-  /** Never send a generated letter without a human seeing it first. */
-  requireManualApproval: z.boolean().default(true),
+  /**
+   * Hold generated letters until a human approves them.
+   *
+   * Off by default, and the reason is the same one that runs through the rest of the
+   * project: an unapproved letter is an application not sent. Nothing is lost when it
+   * is on — apply leaves such a vacancy in the queue rather than recording a skip —
+   * but nothing goes out either until someone calls repo.approveLetter.
+   */
+  requireManualApproval: z.boolean().default(false),
   language: z.enum(['ru', 'en']).default('ru'),
   /**
    * Salary to name when a vacancy asks for expectations, by the grade it targets.
@@ -123,13 +130,25 @@ const letterSchema = z.object({
    * What to say when a vacancy asks for GitHub or a portfolio and there is nothing to
    * link. Answering plainly beats ignoring the request — an employer who asked and got
    * silence reads that as the posting not being read.
+   *
+   * Phrased as a reason, never as a shortcoming: "код закрыт NDA" is a fact about the
+   * employer, "пет-проекты не веду" is an admission, and the letter never makes one.
    */
   noLinksExcuse: z
     .string()
     .default(
-      'GitHub пустой, пет-проекты не веду — всё рабочее время уходит на коммерческие задачи, ' +
-        'код закрыт NDA. Готов разобрать любой свой проект на созвоне или выполнить тестовое.',
+      'Весь код рабочий и закрыт NDA, поэтому публичных репозиториев нет. ' +
+        'Готов разобрать любой свой проект на созвоне или выполнить тестовое.',
     ),
+  /**
+   * Experience worth writing about that the resume files do not spell out.
+   *
+   * Appended to the resume in the prompt, never merged into `resume.*.md`: those files
+   * mirror the PDFs actually attached to the application and have to keep matching
+   * them. Backend work lives here — it is what makes a fullstack posting answerable
+   * without claiming anything the candidate cannot back up.
+   */
+  extraSkills: z.string().default(''),
   /**
    * Letters generated per LLM call.
    *

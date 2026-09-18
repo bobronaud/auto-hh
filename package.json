@@ -12,6 +12,7 @@
     "selectors:probe": "tsx src/cli.ts probe",
     "server": "tsx watch src/server/index.ts",
     "ui": "vite --config ui/vite.config.ts",
+    "build:ui": "vite build --config ui/vite.config.ts",
     "dev": "npm-run-all --parallel server ui",
     "typecheck": "tsc --noEmit",
     "review": "tsx src/cli.ts review",

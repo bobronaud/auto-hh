@@ -36,7 +36,7 @@
     "minScore": 1
   },
   "search": {
-    "text": "frontend OR фронтенд OR react OR vue OR angular OR javascript OR typescript OR верстальщик",
+    "text": "frontend OR фронтенд OR react OR vue OR angular OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js",
     "searchField": [
       "name"
     ],
@@ -86,23 +86,36 @@
       "верстальщик",
       "вёрстка",
       "верстка",
-      "ui"
+      "ui",
+      "fullstack",
+      "full-stack",
+      "full stack",
+      "фулстек",
+      "фуллстек",
+      "фулстак",
+      "node",
+      "node.js",
+      "nodejs",
+      "nest",
+      "nest.js",
+      "nestjs"
     ]
   },
   "letter": {
     "mode": "static",
     "text": "Здравствуйте! Работал со всеми технологиями из вашей вакансии. Когда удобно созвониться?",
-    "maxChars": 1800,
-    "minChars": 0,
-    "requireManualApproval": true,
+    "maxChars": 1000,
+    "minChars": 300,
+    "requireManualApproval": false,
     "language": "ru",
     "salaryByGrade": {
       "junior": 150000,
       "middle": 200000,
       "senior": 250000
     },
-    "noLinksExcuse": "",
-    "batchSize": 10
+    "noLinksExcuse": "Весь код рабочий и закрыт NDA, поэтому публичных репозиториев нет. Готов разобрать любой свой проект на созвоне или выполнить тестовое.",
+    "batchSize": 10,
+    "extraSkills": ""
   },
   "llm": {
     "provider": "claude-cli",

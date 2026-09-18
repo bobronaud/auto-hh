@@ -53,6 +53,31 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
   }
   if (candidates.length === 0) return result
 
+  // In llm mode the letters are written here, at the head of the run, for exactly the
+  // vacancies this run is about to answer. One button, not two: a letter is part of
+  // the application, and a separate step that has to be remembered first is a step
+  // that gets forgotten — with the application going out bare.
+  //
+  // Still a batch rather than a letter per vacancy inside the loop: every claude-cli
+  // call re-sends Claude Code's system prompt, which measured 24x per letter. The hh
+  // traffic is unchanged either way — the vacancy pages are read once for their
+  // descriptions, exactly as the standalone letters run read them.
+  if (cfg.letter.mode === 'llm') {
+    const needLetters = candidates.filter((v) => !repo.latestLetter(v.id))
+    if (needLetters.length > 0) {
+      log.info(`writing ${needLetters.length} letters before applying`)
+      const { writeLettersFor } = await import('./letters.js')
+      const written = await writeLettersFor(cfg, needLetters)
+      log.info(`letters: ${written.written} written, ${written.rejected} rejected`)
+      // A captcha or a lost session during the reading stops the run: the apply loop
+      // would walk into the same wall, one page later.
+      if (written.stopReason) {
+        result.stopReason = written.stopReason
+        return result
+      }
+    }
+  }
+
   const runId = repo.startRun(cfg.dryRun ? 'dry_run' : 'apply')
   const ctx = await openContext(cfg)
 
@@ -77,19 +102,25 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
       if (cfg.letter.mode === 'static') {
         letter = cfg.letter.text.trim() || null
       } else {
-        // Letters are written ahead of time by `npm run letters`. A vacancy with no
-        // letter is still applied to — unless hh demands one, an application without
-        // a cover letter beats no application at all.
+        // The letter was written at the head of this run (or by `npm run letters`
+        // earlier). If it is still missing, generation failed or validation rejected
+        // it — the vacancy is passed over and stays in the queue for the next run
+        // rather than going out bare. Nothing is written to `applications`: a row of
+        // any status drops the vacancy from the queue for good.
         stored = repo.latestLetter(v.id)
-        if (stored) {
-          if (cfg.letter.requireManualApproval && !stored.approved_at) {
-            log.info('   letter not approved yet — skipping')
-            repo.recordApplication({ vacancyId: v.id, runId, status: 'skipped', errorCode: 'letter_unapproved' })
-            result.skipped++
-            continue
-          }
-          letter = stored.text
+        if (!stored) {
+          log.warn('   no letter — leaving it in the queue')
+          result.skipped++
+          continue
         }
+        if (cfg.letter.requireManualApproval && !stored.approved_at) {
+          // Same reasoning, same handling: waiting for approval is a pass, not a
+          // verdict, so the vacancy keeps its place in the queue.
+          log.info('   letter not approved yet — leaving it in the queue')
+          result.skipped++
+          continue
+        }
+        letter = stored.text
       }
 
       let outcome
