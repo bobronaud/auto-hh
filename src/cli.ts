@@ -56,7 +56,8 @@ async function main(): Promise<void> {
 
     case 'letters': {
       const cfg = loadConfig()
-      const n = process.argv[3] ? Number(process.argv[3]) : 10
+      // Same default as the UI button: one batch, the size the config calls a batch.
+      const n = process.argv[3] ? Number(process.argv[3]) : cfg.letter.batchSize
       const { writeLetters, printLettersResult } = await import('./pipeline/letters.js')
       printLettersResult(await writeLetters(cfg, n), cfg)
       break
@@ -175,8 +176,17 @@ async function doctor(): Promise<void> {
   const parked = repo.countNeedsHuman()
   if (parked > 0) console.log(`parked      ${parked} awaiting manual handling — npm run review`)
   if (cfg.letter.mode === 'llm') {
-    const unapproved = repo.countLettersAwaitingApproval()
-    if (unapproved > 0) console.log(`letters     ${unapproved} written, awaiting approval`)
+    // "Awaiting approval" only when something is actually waiting: with approval off
+    // these letters are simply ready, and saying otherwise sends the reader looking
+    // for an approval step that does not gate anything.
+    const ready = repo.countLettersAwaitingApproval()
+    if (ready > 0) {
+      console.log(
+        cfg.letter.requireManualApproval
+          ? `letters     ${ready} written, awaiting approval — queue tab in the UI`
+          : `letters     ${ready} written, will be sent as they are`,
+      )
+    }
   }
   const failed = repo.countFailed()
   if (failed > 0) console.log(`failed      ${failed} applications did not go through — npm run failures`)
