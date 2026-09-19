@@ -116,31 +116,6 @@ const letterSchema = z.object({
   requireManualApproval: z.boolean().default(false),
   language: z.enum(['ru', 'en']).default('ru'),
   /**
-   * Salary to name when a vacancy asks for expectations, by the grade it targets.
-   * Detection is in scoring/grade.ts; an unstated grade is treated as middle.
-   */
-  salaryByGrade: z
-    .object({
-      junior: z.number().int().positive(),
-      middle: z.number().int().positive(),
-      senior: z.number().int().positive(),
-    })
-    .default({ junior: 150_000, middle: 200_000, senior: 250_000 }),
-  /**
-   * What to say when a vacancy asks for GitHub or a portfolio and there is nothing to
-   * link. Answering plainly beats ignoring the request — an employer who asked and got
-   * silence reads that as the posting not being read.
-   *
-   * Phrased as a reason, never as a shortcoming: "код закрыт NDA" is a fact about the
-   * employer, "пет-проекты не веду" is an admission, and the letter never makes one.
-   */
-  noLinksExcuse: z
-    .string()
-    .default(
-      'Весь код рабочий и закрыт NDA, поэтому публичных репозиториев нет. ' +
-        'Готов разобрать любой свой проект на созвоне или выполнить тестовое.',
-    ),
-  /**
    * Experience worth writing about that the resume files do not spell out.
    *
    * Appended to the resume in the prompt, never merged into `resume.*.md`: those files

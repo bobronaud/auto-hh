@@ -1,7 +1,7 @@
 import type { Config, ResumeConfig } from '../config/schema.js'
 
 /** Bump when the wording changes, so stored letters stay attributable. */
-export const PROMPT_VERSION = 'v3'
+export const PROMPT_VERSION = 'v4'
 
 /**
  * Letters are returned between plain-text delimiters, not as JSON.
@@ -19,14 +19,6 @@ export interface LetterTarget {
   company: string | null
   /** Trimmed vacancy description, when we have one. */
   description?: string | null
-}
-
-/** Per-vacancy instructions derived from what the posting asks for. */
-export interface TargetHints {
-  /** Salary to name, in roubles, when the posting asked for expectations. */
-  salary?: number
-  /** The posting asked for links we do not have. */
-  explainNoLinks?: boolean
 }
 
 /**
@@ -48,6 +40,10 @@ export interface TargetHints {
  *     unmentioned.
  *   - It must not sign off. The letter travels attached to the resume, which already
  *     carries the name and the contacts.
+ *
+ * Salary and links are simply absent from these rules — no instruction, no ban. The
+ * project used to read the posting for requests of that kind and steer the letter
+ * accordingly; that machinery is gone, and the owner asked for nothing in its place.
  *
  * The grounding rule is aimed at fabricated *specifics* — metrics, durations, company
  * names, job titles — because those are checkable and a person will ask about them.
@@ -87,8 +83,6 @@ export function systemPrompt(cfg: Config): string {
     '  рекрутер видит там и имя, и контакты.',
     '— Не выдумывай проверяемых фактов: цифр, метрик, сроков, названий компаний и должностей.',
     '  Любая конкретика берётся из резюме дословно или близко к тексту.',
-    '— Зарплату и отсутствие ссылок упоминай ТОЛЬКО там, где это указано в задании',
-    '  к конкретной вакансии. Не додумывай эти темы и не переноси их между вакансиями.',
     '— Не повторяй одну и ту же формулировку в разных письмах.',
   ].join('\n')
 }
@@ -98,7 +92,6 @@ export function batchPrompt(
   resume: ResumeConfig,
   resumeText: string,
   cfg: Config,
-  hints: ReadonlyMap<number, TargetHints> = new Map(),
 ): string {
   const vacancies = targets
     .map((t) => {
@@ -106,35 +99,7 @@ export function batchPrompt(
       // A trimmed description still anchors the letter; the full text would blow the
       // batch out for no gain.
       const desc = t.description ? `\n   ${collapse(t.description).slice(0, 700)}` : ''
-
-      // Requirements go next to their own vacancy, not into the shared rules: in a
-      // batch of ten only some postings ask for a salary, and a global instruction
-      // would put one into every letter.
-      const h = hints.get(t.index)
-      const extra: string[] = []
-
-      if (h?.salary) {
-        extra.push(`   ОБЯЗАТЕЛЬНО укажи зарплатные ожидания: ${formatSalary(h.salary)}.`)
-      } else {
-        // The negative is stated explicitly, per vacancy, rather than left to be
-        // inferred from silence. In a mixed batch the model otherwise carries the
-        // topic across from the vacancies that did ask.
-        extra.push('   Про зарплату НЕ пиши: эта вакансия о ней не спрашивает.')
-      }
-
-      if (h?.explainNoLinks) {
-        extra.push(
-          '   Вакансия просит ссылки на проекты или GitHub. Ссылок нет — кратко объясни почему, ' +
-            'своими словами по смыслу: ' +
-            cfg.letter.noLinksExcuse,
-        )
-      } else {
-        extra.push(
-          '   Про GitHub, портфолио и пет-проекты НЕ пиши ни слова: эта вакансия их не просит.',
-        )
-      }
-
-      return [head + desc, ...extra].join('\n')
+      return head + desc
     })
     .join('\n\n')
 
@@ -172,12 +137,3 @@ function collapse(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/**
- * 200000 -> "200 000 руб".
- *
- * Plain spaces and a plain word on purpose: a thin space and the ₽ sign are exactly
- * the characters a person does not type, and `validate.ts` rejects them.
- */
-function formatSalary(n: number): string {
-  return `${n.toLocaleString('ru-RU').replace(/[\u00a0\u202f]/g, ' ')} руб`
-}

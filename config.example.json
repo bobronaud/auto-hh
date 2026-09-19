@@ -108,12 +108,6 @@
     "minChars": 300,
     "requireManualApproval": false,
     "language": "ru",
-    "salaryByGrade": {
-      "junior": 150000,
-      "middle": 200000,
-      "senior": 250000
-    },
-    "noLinksExcuse": "Весь код рабочий и закрыт NDA, поэтому публичных репозиториев нет. Готов разобрать любой свой проект на созвоне или выполнить тестовое.",
     "batchSize": 10,
     "extraSkills": ""
   },

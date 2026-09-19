@@ -17,8 +17,6 @@ export type LetterProblem =
   | 'markdown'
   | 'placeholder'
   | 'meta_commentary'
-  | 'unsolicited_salary'
-  | 'unsolicited_links'
   | 'typography'
   | 'self_deprecating'
   | 'signature'
@@ -30,17 +28,9 @@ export const PROBLEM_LABEL: Record<LetterProblem, string> = {
   markdown: 'содержит markdown-разметку',
   placeholder: 'содержит незаполненный плейсхолдер',
   meta_commentary: 'содержит служебный текст модели',
-  unsolicited_salary: 'называет зарплату, хотя вакансия о ней не спрашивала',
-  unsolicited_links: 'оправдывается за отсутствие ссылок, хотя их не просили',
   typography: 'символы, которых нет на клавиатуре (длинное тире и подобные)',
   self_deprecating: 'признаётся, что чего-то не знает или не делал',
   signature: 'подписано именем или контактами',
-}
-
-/** What this particular vacancy actually asked the letter to contain. */
-export interface AskedFor {
-  salary: boolean
-  links: boolean
 }
 
 /**
@@ -76,15 +66,18 @@ const SIGN_OFF = /[Сс]\s+уважением[,!]?\s*\p{Lu}\p{L}+|[Bb]est\s+rega
 const CONTACTS =
   /[\w.+-]+@[\w-]+\.\p{L}{2,}|\+7[\s(-]?\d{3}|\b8\s?\(?9\d{2}\)?[\s-]?\d{3}|t\.me\/|телеграм|telegram|whatsapp|вотсап/iu
 
-/** A salary figure: "200 000 ₽", "200000 руб". */
-const SALARY_FIGURE = /\d{3}[\s\u00a0\u202f]?\d{3}\s*(?:₽|руб|р\.)/iu
-
-/** Talking about GitHub, a portfolio, or the absence of pet projects. */
-const LINKS_TOPIC = /github|гитхаб|портфолио|portfolio|пет[-\s]?проект|pet[-\s]?проект|gitlab/iu
-
 export interface Validation {
   ok: boolean
   problems: LetterProblem[]
+  /**
+   * The exact text that tripped each pattern.
+   *
+   * Without it a rejection is unreportable: the letter is never stored, so "признаётся,
+   * что чего-то не знает" names a verdict nobody can check against a text that no
+   * longer exists. Same rule the hh detectors follow — a detector that stops work has
+   * to say what fired.
+   */
+  matched: Partial<Record<LetterProblem, string>>
 }
 
 /** Square-bracket or curly placeholders the model forgot to fill. */
@@ -102,29 +95,42 @@ const META =
  */
 const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
 
-export function validateLetter(text: string, cfg: Config, asked?: AskedFor): Validation {
+export function validateLetter(text: string, cfg: Config): Validation {
   const problems: LetterProblem[] = []
+  const matched: Partial<Record<LetterProblem, string>> = {}
   const trimmed = text.trim()
 
-  if (trimmed.length === 0) return { ok: false, problems: ['empty'] }
-  if (trimmed.length > cfg.letter.maxChars) problems.push('too_long')
-  if (trimmed.length < cfg.letter.minChars) problems.push('too_short')
-  if (MARKDOWN.test(trimmed)) problems.push('markdown')
-  if (PLACEHOLDER.test(trimmed)) problems.push('placeholder')
-  if (META.test(trimmed)) problems.push('meta_commentary')
-  if (TYPOGRAPHY.test(trimmed)) problems.push('typography')
-  if (SELF_DEPRECATING.test(trimmed)) problems.push('self_deprecating')
-  if (SIGN_OFF.test(trimmed) || CONTACTS.test(trimmed)) problems.push('signature')
-
-  // Batch contamination: with ten vacancies in one prompt, a topic raised by one of
-  // them leaks into its neighbours. Volunteering a salary nobody asked for weakens
-  // the letter, and apologising for missing links draws attention to their absence.
-  if (asked) {
-    if (!asked.salary && SALARY_FIGURE.test(trimmed)) problems.push('unsolicited_salary')
-    if (!asked.links && LINKS_TOPIC.test(trimmed)) problems.push('unsolicited_links')
+  /** Records the problem along with the fragment that caused it. */
+  const hit = (problem: LetterProblem, ...res: RegExp[]): void => {
+    for (const re of res) {
+      const m = trimmed.match(re)
+      if (m) {
+        problems.push(problem)
+        matched[problem] = quote(trimmed, m)
+        return
+      }
+    }
   }
 
-  return { ok: problems.length === 0, problems }
+  if (trimmed.length === 0) return { ok: false, problems: ['empty'], matched }
+  if (trimmed.length > cfg.letter.maxChars) problems.push('too_long')
+  if (trimmed.length < cfg.letter.minChars) problems.push('too_short')
+  hit('markdown', MARKDOWN)
+  hit('placeholder', PLACEHOLDER)
+  hit('meta_commentary', META)
+  hit('typography', TYPOGRAPHY)
+  hit('self_deprecating', SELF_DEPRECATING)
+  hit('signature', SIGN_OFF, CONTACTS)
+
+  return { ok: problems.length === 0, problems, matched }
+}
+
+/** The match with a few words either side — a bare match is rarely enough to judge. */
+function quote(text: string, m: RegExpMatchArray): string {
+  const at = m.index ?? 0
+  const from = Math.max(0, at - 40)
+  const to = Math.min(text.length, at + m[0].length + 40)
+  return `${from > 0 ? '…' : ''}${text.slice(from, to).replace(/\s+/g, ' ')}${to < text.length ? '…' : ''}`
 }
 
 /**
