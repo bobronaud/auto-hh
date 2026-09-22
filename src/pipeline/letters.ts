@@ -139,7 +139,7 @@ async function ensureDescriptions(
     const page = await getPage(ctx)
     for (const v of missing) {
       try {
-        const details = await fetchVacancyDetails(page, v.url)
+        const details = await fetchVacancyDetails(page, v.url, cfg)
         if (details.archived) {
           repo.markArchived(v.id)
           archived.add(v.id)

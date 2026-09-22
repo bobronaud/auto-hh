@@ -2,7 +2,7 @@ import type { Page } from 'playwright'
 import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
 import { classifyApplyFlow, confirmOtherCountry, type NeedsHumanReason } from './applyFlow.js'
 import { selectResume } from './resumePicker.js'
-import { goto, screenshot, pause, randomBetween } from './browser.js'
+import { goto, screenshot, pause, randomBetween, waitOutCaptcha, dumpHtml } from './browser.js'
 import { logger } from '../core/logger.js'
 import type { Config, ResumeConfig } from '../config/schema.js'
 
@@ -34,7 +34,7 @@ export async function applyToVacancy(
   cfg: Config,
   input: ApplyInput,
 ): Promise<ApplyOutcome> {
-  await goto(page, input.url)
+  await goto(page, input.url, cfg)
   await randomBetween(cfg.limits.readPauseMsMin, cfg.limits.readPauseMsMax)
 
   if (await firstVisibleMatch(page, selectors.vacancy.archived)) {
@@ -49,6 +49,22 @@ export async function applyToVacancy(
 
   await page.locator(applySel).first().click()
   await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+
+  // hh can answer the apply click with a captcha instead of a form. Checked here and
+  // again after submit: both are mid-flow, without a navigation, so goto()'s state
+  // check never sees them. The human types it in the open window; then the click has
+  // to be repeated, because the one that raised the captcha never opened anything.
+  if (await waitOutCaptcha(page, cfg, 'apply-click')) {
+    const opened = (await firstMatch(page, selectors.apply.modal)) !== null
+    if (!opened && !/\/applicant\/vacancy_response/.test(page.url())) {
+      try {
+        await page.locator(applySel).first().click()
+        await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+      } catch (e) {
+        log.warn(`   не удалось повторить клик после капчи: ${(e as Error).message}`)
+      }
+    }
+  }
 
   // Предупреждение о вакансии в другой стране стоит ПЕРЕД формой отклика и формой
   // не является. Подтверждаем и ждём то, что откроется следом.
@@ -121,6 +137,25 @@ export async function applyToVacancy(
   await page.locator(submitSel).first().click()
   await pause(cfg.limits.delayMs + 1500, cfg.limits.delayJitterMs)
 
+  // Before asking whether it worked, ask whether hh is still talking to us. A captcha
+  // here means the application did NOT go out, and the next vacancy would hit the same
+  // wall — 63 of them did on 22.09, each written off as no_success_confirmation.
+  if (await waitOutCaptcha(page, cfg, 'submit')) {
+    if (!(await firstVisibleMatch(page, selectors.apply.success))) {
+      // The captcha ate the click. Pressing submit once more finishes THAT
+      // application rather than retrying a failed one, so invariant 7 is intact: if
+      // it did go out, hh answers "вы уже откликались", which costs nothing next to
+      // losing the vacancy.
+      const again = await firstVisibleMatch(page, selectors.apply.submitButton)
+      if (again) {
+        log.info('   дожимаем отправку после капчи')
+        await page.locator(again).first().click()
+        await pause(cfg.limits.delayMs + 1500, cfg.limits.delayJitterMs)
+        await waitOutCaptcha(page, cfg, 'submit-retry')
+      }
+    }
+  }
+
   // Confirm rather than assume. Without positive evidence the application is NOT
   // recorded as sent — a false 'applied' would both skip a real vacancy forever and
   // consume a slot in the rolling window that hh never actually counted.
@@ -139,6 +174,10 @@ export async function applyToVacancy(
         screenshot: shot,
       }
     }
+    // Unknown shape: keep the markup too. The screenshot showed a captcha dialog that
+    // no selector knew about, and without the HTML there was nothing to fix it from.
+    const dump = await dumpHtml(page, 'no-success-confirmation')
+    log.warn(`no confirmation — screenshot ${shot}${dump ? `, html ${dump}` : ''}`)
     return {
       status: 'failed',
       errorCode: 'no_success_confirmation',

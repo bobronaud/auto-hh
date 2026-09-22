@@ -1,6 +1,7 @@
 import type { Page } from 'playwright'
 import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
 import { goto } from './browser.js'
+import type { Config } from '../config/schema.js'
 
 /**
  * Read a vacancy page.
@@ -16,8 +17,12 @@ export interface VacancyDetails {
   archived: boolean
 }
 
-export async function fetchVacancyDetails(page: Page, url: string): Promise<VacancyDetails> {
-  await goto(page, url)
+export async function fetchVacancyDetails(
+  page: Page,
+  url: string,
+  cfg?: Config,
+): Promise<VacancyDetails> {
+  await goto(page, url, cfg)
 
   if (await firstVisibleMatch(page, selectors.vacancy.archived)) {
     return { description: null, hasTest: null, archived: true }

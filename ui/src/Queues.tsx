@@ -76,6 +76,8 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
   const { data, error, reload } = useFetch(() => api.needsHuman(includeResolved), [version, includeResolved])
   const [busy, setBusy] = useState<number | null>(null)
 
+  const [busyAll, setBusyAll] = useState(false)
+
   const resolve = async (id: number): Promise<void> => {
     setBusy(id)
     try {
@@ -87,8 +89,25 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
     }
   }
 
+  // Clearing the queue is not undoable from the UI, so it asks first — but only
+  // asks: twenty vacancies handled by hand are twenty clicks otherwise, and a queue
+  // that costs that much to clear stops being read.
+  const resolveAll = async (n: number): Promise<void> => {
+    if (!confirm(`Пометить разобранными все ${n}? Вернуть их в эту очередь из UI нельзя.`)) return
+    setBusyAll(true)
+    try {
+      await api.resolveAll()
+      reload()
+      onChange()
+    } finally {
+      setBusyAll(false)
+    }
+  }
+
   if (error) return <ErrorLine error={error} />
   if (!data) return <Empty>загрузка…</Empty>
+
+  const open = data.rows.filter((r) => !r.resolved_at).length
 
   return (
     <>
@@ -104,6 +123,16 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
           показывать разобранные
         </label>
       </p>
+      {open > 0 && (
+        <button
+          className="small"
+          disabled={busyAll}
+          onClick={() => void resolveAll(open)}
+          style={{ marginBottom: 10 }}
+        >
+          разобрал все ({open})
+        </button>
+      )}
       {data.rows.length === 0 ? (
         <Empty>ничего не отложено</Empty>
       ) : (

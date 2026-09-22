@@ -163,8 +163,14 @@ const browserSchema = z.object({
   headless: z.boolean().default(false),
   locale: z.string().default('ru-RU'),
   timezone: z.string().default('Europe/Moscow'),
-  /** Milliseconds to wait for the user to finish a manual login / captcha. */
-  manualActionTimeoutMs: z.number().int().min(30_000).default(300_000),
+  /**
+   * Milliseconds to wait for the user to finish a manual login / captcha.
+   *
+   * 20 minutes, not 5: this is also how long a run pauses mid-flight when hh raises
+   * a captcha (waitOutCaptcha), and a run that gives up before the owner walks back
+   * to the keyboard throws away the queue it was halfway through.
+   */
+  manualActionTimeoutMs: z.number().int().min(30_000).default(1_200_000),
   slowMoMs: z.number().int().min(0).default(0),
 })
 

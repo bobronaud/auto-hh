@@ -1,5 +1,6 @@
 import { chromium, type BrowserContext, type Page } from 'playwright'
-import { BROWSER_PROFILE_DIR, SCREENSHOT_DIR, ensureDirs } from '../core/paths.js'
+import { writeFileSync } from 'node:fs'
+import { BROWSER_PROFILE_DIR, PROBE_DIR, SCREENSHOT_DIR, ensureDirs } from '../core/paths.js'
 import { logger } from '../core/logger.js'
 import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
 import type { Config } from '../config/schema.js'
@@ -81,10 +82,7 @@ export type PageState = 'logged_in' | 'logged_out' | 'captcha' | 'blocked' | 'un
  * logged-in chrome and would otherwise read as logged in.
  */
 export async function detectState(page: Page): Promise<PageState> {
-  // Visibility, not presence: hh keeps an invisible captcha iframe on ordinary
-  // search pages, and checking for its existence halted collection on a page that
-  // was showing vacancies perfectly well.
-  const captcha = await firstVisibleMatch(page, selectors.antibot.captcha)
+  const captcha = await findCaptcha(page)
   if (captcha) {
     log.warn(`antibot matched: ${captcha}`)
     return 'captcha'
@@ -116,6 +114,156 @@ export async function detectState(page: Page): Promise<PageState> {
   return 'unknown'
 }
 
+/**
+ * Is a captcha on screen right now? Returns the selector that matched — a detector
+ * that stops the run without naming its selector is undebuggable (RESEARCH §7.4).
+ *
+ * Visibility, not presence: hh keeps an invisible captcha iframe on ordinary search
+ * pages, and checking for its existence halted collection on a page that was showing
+ * vacancies perfectly well.
+ *
+ * Two tiers on purpose. Attribute candidates are checked across the document; the
+ * text ones only inside an overlay container, because the page underneath a captcha
+ * modal is a vacancy page and its description is exactly the text that made loose
+ * text matching a rule against itself.
+ */
+export async function findCaptcha(page: Page): Promise<string | null> {
+  const byAttribute = await anyVisible(page, selectors.antibot.captcha)
+  if (byAttribute) return byAttribute
+
+  for (const scopeSel of selectors.antibot.captchaScope) {
+    const scope = page.locator(scopeSel).first()
+    try {
+      if ((await scope.count()) === 0 || !(await scope.isVisible())) continue
+    } catch {
+      continue
+    }
+    for (const textSel of selectors.antibot.captchaText) {
+      try {
+        const loc = scope.locator(textSel).first()
+        if ((await loc.count()) > 0 && (await loc.isVisible())) return `${scopeSel} >> ${textSel}`
+      } catch {
+        // A bad candidate must not abort the scan.
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Which candidate has a VISIBLE element — any of them, not just the first in the DOM.
+ *
+ * firstVisibleMatch stops at .first(), and that is wrong here specifically: hh keeps
+ * an invisible captcha iframe on ordinary pages, so the real, visible captcha can sit
+ * second and read as absent. Scanning a handful of matches per candidate is enough;
+ * a captcha is never the fiftieth node of its kind.
+ */
+async function anyVisible(page: Page, candidates: readonly string[]): Promise<string | null> {
+  for (const sel of candidates) {
+    try {
+      const all = page.locator(sel)
+      const n = Math.min(await all.count(), 5)
+      for (let i = 0; i < n; i++) {
+        const loc = all.nth(i)
+        if (!(await loc.isVisible())) continue
+        const box = await loc.boundingBox()
+        if (box && box.width > 0 && box.height > 0) return sel
+      }
+    } catch {
+      // A bad candidate must not abort the scan.
+    }
+  }
+  return null
+}
+
+/**
+ * A captcha is up: hand the keyboard to the human, then carry on.
+ *
+ * hh can raise one mid-flow, after the submit click, with no navigation — so the
+ * checks in goto() never see it. Walking the rest of the queue through a captcha wall
+ * is both pointless and the exact traffic that turns a temporary challenge into a
+ * block: on 22.09 it cost 63 vacancies in a row.
+ *
+ * We do NOT read the picture (invariant 2). The browser is headful and already open
+ * on the captcha — the owner types the letters, we watch the DOM until it is gone and
+ * resume the same application. What separates a temporary challenge from a permanent
+ * ban is who pressed the keys, so that is the one part not automated.
+ *
+ * Headless has nobody to ask, and a run that timed out waiting is over: both throw
+ * HumanNeededError, which unwinds to the apply loop. It breaks WITHOUT writing an
+ * `applications` row, so the vacancy keeps its place in the queue (invariant 11).
+ *
+ * Returns true if a captcha was solved — the caller has to re-check whatever it was
+ * waiting for, since the click that raised the captcha did not go through.
+ */
+export async function waitOutCaptcha(page: Page, cfg: Config, label: string): Promise<boolean> {
+  const sel = await findCaptcha(page)
+  if (!sel) return false
+
+  const shot = await screenshot(page, `captcha-${label}`)
+  const dump = await dumpHtml(page, `captcha-${label}`)
+  log.error(`captcha matched: ${sel}`, { url: page.url(), shot, dump })
+
+  if (cfg.browser.headless) {
+    log.error('headless — nobody can type the captcha. Stopping.')
+    throw new HumanNeededError('captcha', shot)
+  }
+
+  const timeoutMs = cfg.browser.manualActionTimeoutMs
+  log.warn(
+    `КАПЧА. Введите её в открытом окне браузера — прогон продолжится сам. ` +
+      `Жду до ${Math.round(timeoutMs / 1000)}с.`,
+  )
+
+  const deadline = Date.now() + timeoutMs
+  let lastNudge = Date.now()
+
+  while (Date.now() < deadline) {
+    // Polling our own DOM, not hh: this loop generates no traffic, so the interval is
+    // about how fast we notice, not about looking human.
+    await pause(2000, 400)
+
+    let still: string | null
+    try {
+      still = await findCaptcha(page)
+    } catch {
+      // The human may be mid-navigation; a failed probe is not an answer.
+      continue
+    }
+
+    if (!still) {
+      log.info('капча пройдена — продолжаем')
+      // Let hh finish whatever the solved captcha released.
+      await pause(1500, 300)
+      return true
+    }
+
+    if (Date.now() - lastNudge > 30_000) {
+      lastNudge = Date.now()
+      log.warn(`жду капчу, осталось ${Math.round((deadline - Date.now()) / 1000)}с`)
+    }
+  }
+
+  log.error(`капча не пройдена за ${Math.round(timeoutMs / 1000)}с — останавливаюсь`)
+  throw new HumanNeededError('captcha', shot)
+}
+
+/**
+ * Save the page HTML next to the screenshot. A PNG shows that something unexpected
+ * happened; only the markup says which selector would have caught it.
+ */
+export async function dumpHtml(page: Page, label: string): Promise<string | null> {
+  ensureDirs()
+  const safe = label.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 60)
+  const path = resolve(PROBE_DIR, `${safe}-${Date.now()}.html`)
+  try {
+    writeFileSync(path, await page.content(), 'utf8')
+    return path
+  } catch {
+    return null
+  }
+}
+
 /** Is this an hh page at all, or an antibot interstitial wearing its URL? */
 export async function looksLikeHhPage(page: Page): Promise<boolean> {
   return (await firstMatch(page, selectors.hhChrome)) !== null
@@ -139,10 +287,26 @@ export class HumanNeededError extends Error {
   }
 }
 
-/** Navigate, then refuse to continue on anything that needs a human (§2.2, §2.4). */
-export async function goto(page: Page, url: string): Promise<void> {
+/**
+ * Navigate, then refuse to continue on anything that needs a human (§2.2, §2.4).
+ *
+ * With cfg the captcha case is not fatal: the owner types it in the open window and
+ * the same navigation is re-checked. Without cfg (no caller today) the old behaviour
+ * stands — stop and call a human.
+ */
+export async function goto(page: Page, url: string, cfg?: Config): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-  const state = await detectState(page)
+  let state = await detectState(page)
+
+  if (state === 'captcha' && cfg) {
+    await waitOutCaptcha(page, cfg, 'navigation')
+    // hh usually returns to the requested page by itself; ask for it again if it did
+    // not, then judge the page we actually ended up on.
+    if (page.url() !== url) {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {})
+    }
+    state = await detectState(page)
+  }
 
   if (state === 'logged_in') return
 

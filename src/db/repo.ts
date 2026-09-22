@@ -524,6 +524,22 @@ export class Repo {
     this.db.prepare('UPDATE applications SET resolved_at = ? WHERE id = ?').run(now(), applicationId)
   }
 
+  /**
+   * Clear the whole manual queue at once, and say how many rows it touched.
+   *
+   * Only rows still open are stamped: re-stamping an already resolved one would move
+   * its date to today and lose when it was actually handled.
+   */
+  resolveAllNeedsHuman(): number {
+    const res = this.db
+      .prepare(
+        `UPDATE applications SET resolved_at = ?
+         WHERE status = 'needs_human' AND resolved_at IS NULL`,
+      )
+      .run(now())
+    return res.changes
+  }
+
   countNeedsHuman(): number {
     const row = this.db
       .prepare(`SELECT COUNT(*) AS n FROM applications WHERE status = 'needs_human' AND resolved_at IS NULL`)

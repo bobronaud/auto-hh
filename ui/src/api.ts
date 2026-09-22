@@ -141,6 +141,7 @@ export const api = {
   config: () =>
     json<{ path: string; raw: string | null; warnings: string[]; config: unknown }>('/api/config'),
   resolve: (id: number) => post<{ ok: true }>(`/api/needs-human/${id}/resolve`),
+  resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
   approveLetter: (id: number, text?: string) =>
     post<{ ok: true; id: number }>(`/api/letters/${id}/approve`, text === undefined ? {} : { text }),
   requeue: (errorCode?: string) => post<{ requeued: number }>('/api/failed/requeue', { errorCode }),

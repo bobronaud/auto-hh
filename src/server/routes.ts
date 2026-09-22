@@ -62,6 +62,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /**
+   * The same, for everything open at once. A queue of twenty is twenty clicks, and a
+   * queue nobody clears is a queue nobody reads.
+   */
+  app.post('/api/needs-human/resolve-all', () => {
+    const n = repo.resolveAllNeedsHuman()
+    pingState('needs-human:resolved')
+    return { ok: true, resolved: n }
+  })
+
+  /**
    * Put failures back in the queue. Manual by design (§7): the usual cause is a
    * broken selector, and an automatic retry loop against hh is what turns that into
    * a blocked account. The button is here, the judgement stays with the human.

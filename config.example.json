@@ -122,7 +122,7 @@
     "headless": false,
     "locale": "ru-RU",
     "timezone": "Europe/Moscow",
-    "manualActionTimeoutMs": 300000,
+    "manualActionTimeoutMs": 1200000,
     "slowMoMs": 0
   }
 }

@@ -148,7 +148,7 @@ export async function collectVacancies(page: Page, cfg: Config): Promise<Scraped
   for (let p = 0; p < cfg.search.maxPages; p++) {
     const url = buildSearchUrl(cfg.search, p)
     log.info(`page ${p + 1}/${cfg.search.maxPages}`)
-    await goto(page, url)
+    await goto(page, url, cfg)
     await randomBetween(cfg.limits.readPauseMsMin, cfg.limits.readPauseMsMax)
 
     const cards = await scrapePage(page)
