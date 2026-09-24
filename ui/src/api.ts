@@ -144,6 +144,8 @@ export const api = {
   resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
   approveLetter: (id: number, text?: string) =>
     post<{ ok: true; id: number }>(`/api/letters/${id}/approve`, text === undefined ? {} : { text }),
+  requeueOne: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/requeue`),
+  markApplied: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/mark-applied`),
   requeue: (errorCode?: string) => post<{ requeued: number }>('/api/failed/requeue', { errorCode }),
   run: (mode: RunMode, limit?: number) => post<{ run: RunState }>(`/api/run/${mode}`, { limit }),
   setDryRun: (dryRun: boolean) => post<{ dryRun: boolean }>('/api/config/dry-run', { dryRun }),

@@ -83,6 +83,30 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, requeued: n, errorCode: code ?? null }
   })
 
+  /** One failure back in the queue — same manual judgement, per row. */
+  app.post<{ Params: { id: string } }>('/api/failed/:id/requeue', (req, reply) => {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad application id' })
+    if (!repo.requeueFailedOne(id)) return reply.code(409).send({ error: 'not a failed application' })
+    pingState('failed:requeued')
+    return { ok: true, id }
+  })
+
+  /**
+   * Turn one failure into `applied`, for when hh shows the response went through
+   * despite the failed confirmation. Per row, not per cause: the check is made on hh
+   * for a specific vacancy, and a false `applied` is the costly mistake (§5).
+   */
+  app.post<{ Params: { id: string } }>('/api/failed/:id/mark-applied', (req, reply) => {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad application id' })
+    if (!repo.markFailedApplied(id)) {
+      return reply.code(409).send({ error: 'not a failed application, or the vacancy is already applied' })
+    }
+    pingState('failed:marked-applied')
+    return { ok: true, id }
+  })
+
   /**
    * Approve a letter, with an edit if the text came back changed.
    *

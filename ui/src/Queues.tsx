@@ -201,6 +201,30 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
     }
   }
 
+  const requeueOne = async (id: number, title: string): Promise<void> => {
+    if (!confirm(`Вернуть «${title}» в очередь? Делайте это после того, как причина починена.`)) return
+    setBusy(true)
+    try {
+      await api.requeueOne(id)
+      reload()
+      onChange()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const markApplied = async (id: number, title: string): Promise<void> => {
+    if (!confirm(`Отметить «${title}» как отправленный? Сначала проверьте на hh, что отклик там есть.`)) return
+    setBusy(true)
+    try {
+      await api.markApplied(id)
+      reload()
+      onChange()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (error) return <ErrorLine error={error} />
   if (!data) return <Empty>загрузка…</Empty>
   if (data.rows.length === 0) return <Empty>неуспешных откликов нет</Empty>
@@ -239,6 +263,7 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
               <th>сообщение</th>
               <th>скриншот</th>
               <th className="num">когда</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -254,6 +279,22 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
                   <Shot path={r.screenshot_path} />
                 </td>
                 <td className="num dim nowrap">{dateTime(r.created_at)}</td>
+                <td className="nowrap">
+                  <button
+                    className="small"
+                    disabled={busy}
+                    onClick={() => void requeueOne(r.application_id, r.title)}
+                  >
+                    вернуть в очередь
+                  </button>{' '}
+                  <button
+                    className="small"
+                    disabled={busy}
+                    onClick={() => void markApplied(r.application_id, r.title)}
+                  >
+                    отметить как разобранное
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -497,6 +497,38 @@ export class Repo {
     return info.changes
   }
 
+  /** The same for a single failure, from its row in the UI. */
+  requeueFailedOne(applicationId: number): boolean {
+    const res = this.db
+      .prepare(`DELETE FROM applications WHERE id = ? AND status = 'failed'`)
+      .run(applicationId)
+    return res.changes > 0
+  }
+
+  /**
+   * Mark one failure as a real application, after checking on hh that it went through
+   * (a `no_success_confirmation` whose response is in fact in the hh history).
+   *
+   * `applied_at` is the attempt time, not now: the 24h window has to match what hh
+   * counted, and hh counted it when it was sent. The error fields stay as the record of
+   * how the row got here; `resolved_at` stamps the manual confirmation. Refuses when the
+   * vacancy already has an applied row — the unique index would anyway.
+   */
+  markFailedApplied(applicationId: number): boolean {
+    const res = this.db
+      .prepare(
+        `UPDATE applications
+         SET status = 'applied', applied_at = created_at, resolved_at = ?
+         WHERE id = ? AND status = 'failed'
+           AND NOT EXISTS (
+             SELECT 1 FROM applications o
+             WHERE o.vacancy_id = applications.vacancy_id AND o.status = 'applied'
+           )`,
+      )
+      .run(now(), applicationId)
+    return res.changes > 0
+  }
+
   // ------------------------------------------------------------- needs human
 
   /**
