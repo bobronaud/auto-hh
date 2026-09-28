@@ -89,11 +89,7 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
     }
   }
 
-  // Clearing the queue is not undoable from the UI, so it asks first — but only
-  // asks: twenty vacancies handled by hand are twenty clicks otherwise, and a queue
-  // that costs that much to clear stops being read.
-  const resolveAll = async (n: number): Promise<void> => {
-    if (!confirm(`Пометить разобранными все ${n}? Вернуть их в эту очередь из UI нельзя.`)) return
+  const resolveAll = async (): Promise<void> => {
     setBusyAll(true)
     try {
       await api.resolveAll()
@@ -127,7 +123,7 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
         <button
           className="small"
           disabled={busyAll}
-          onClick={() => void resolveAll(open)}
+          onClick={() => void resolveAll()}
           style={{ marginBottom: 10 }}
         >
           разобрал все ({open})
@@ -189,8 +185,6 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
   const [busy, setBusy] = useState(false)
 
   const requeue = async (code?: string): Promise<void> => {
-    const what = code ? `все неуспешные с кодом ${code}` : 'все неуспешные отклики'
-    if (!confirm(`Вернуть ${what} в очередь? Делайте это после того, как причина починена.`)) return
     setBusy(true)
     try {
       await api.requeue(code)
@@ -201,8 +195,7 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
     }
   }
 
-  const requeueOne = async (id: number, title: string): Promise<void> => {
-    if (!confirm(`Вернуть «${title}» в очередь? Делайте это после того, как причина починена.`)) return
+  const requeueOne = async (id: number): Promise<void> => {
     setBusy(true)
     try {
       await api.requeueOne(id)
@@ -213,8 +206,7 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
     }
   }
 
-  const markApplied = async (id: number, title: string): Promise<void> => {
-    if (!confirm(`Отметить «${title}» как отправленный? Сначала проверьте на hh, что отклик там есть.`)) return
+  const markApplied = async (id: number): Promise<void> => {
     setBusy(true)
     try {
       await api.markApplied(id)
@@ -283,14 +275,14 @@ export function Failures({ version, onChange }: { version: number; onChange: () 
                   <button
                     className="small"
                     disabled={busy}
-                    onClick={() => void requeueOne(r.application_id, r.title)}
+                    onClick={() => void requeueOne(r.application_id)}
                   >
                     вернуть в очередь
                   </button>{' '}
                   <button
                     className="small"
                     disabled={busy}
-                    onClick={() => void markApplied(r.application_id, r.title)}
+                    onClick={() => void markApplied(r.application_id)}
                   >
                     отметить как разобранное
                   </button>

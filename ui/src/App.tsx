@@ -12,7 +12,7 @@ type Tab = 'dashboard' | 'pending' | 'needs_human' | 'failed' | 'history' | 'con
 export function App() {
   const { state, error, logs, connected, refresh } = useLive();
   const [tab, setTab] = useState<Tab>('dashboard');
-  const [applyCount, setApplyCount] = useState(10);
+  const [applyCount, setApplyCount] = useState(100);
   const [runError, setRunError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   // Bumped whenever a queue may have changed, so the open tab refetches.
@@ -24,16 +24,9 @@ export function App() {
 
   const busy = state?.run ?? null;
 
-  /**
-   * Going live is the one switch that changes what a click costs, so it asks first.
-   * Going back to a dry run sends nothing and needs no ceremony.
-   */
   const toggleDryRun = async (): Promise<void> => {
     if (!state) return;
     const next = !state.dryRun;
-    if (!next && !confirm('Включить боевой режим? Дальше каждый отклик уходит работодателю по-настоящему.')) {
-      return;
-    }
     setRunError(null);
     setSwitching(true);
     try {
