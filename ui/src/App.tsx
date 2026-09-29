@@ -13,6 +13,8 @@ export function App() {
   const { state, error, logs, connected, refresh } = useLive();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [applyCount, setApplyCount] = useState(100);
+  // Days back for collect, 0 = all time. Per run, not saved to the config.
+  const [collectPeriod, setCollectPeriod] = useState(3);
   const [runError, setRunError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   // Bumped whenever a queue may have changed, so the open tab refetches.
@@ -39,10 +41,10 @@ export function App() {
     }
   };
 
-  const run = async (mode: RunMode, limit?: number): Promise<void> => {
+  const run = async (mode: RunMode, opts?: { limit?: number; period?: number }): Promise<void> => {
     setRunError(null);
     try {
-      await api.run(mode, limit);
+      await api.run(mode, opts);
       bump();
     } catch (e) {
       setRunError((e as Error).message);
@@ -105,7 +107,8 @@ export function App() {
           {busy ? (
             <span className='badge neutral'>
               идёт {busy.mode}
-              {busy.limit ? ` ×${busy.limit}` : ''} · с {dateTime(busy.startedAt)}
+              {busy.limit ? ` ×${busy.limit}` : ''}
+              {busy.period !== undefined ? ` · ${busy.period === 0 ? 'за всё время' : `за ${busy.period} дн.`}` : ''} · с {dateTime(busy.startedAt)}
             </span>
           ) : (
             <>
@@ -125,15 +128,18 @@ export function App() {
                     ? 'откликнуться на n вакансий из очереди'
                     : 'лимит исчерпан — скользящее окно'
                 }
-                onClick={() => void run('apply', applyCount)}>
+                onClick={() => void run('apply', { limit: applyCount })}>
                 откликнуться ×{applyCount}
               </button>
-              <button onClick={() => void run('collect')}>собрать вакансии</button>
-              {state.letter.mode === 'llm' && (
-                <button title='написать письма заранее — отклик и сам их напишет' onClick={() => void run('letters')}>
-                  написать письма
-                </button>
-              )}
+              <select
+                value={collectPeriod}
+                onChange={(e) => setCollectPeriod(Number(e.target.value))}
+                title='за какой срок собирать вакансии'>
+                <option value={3}>3 дня</option>
+                <option value={7}>7 дней</option>
+                <option value={0}>всё время</option>
+              </select>
+              <button onClick={() => void run('collect', { period: collectPeriod })}>собрать вакансии</button>
               <button onClick={() => void run('session')}>проверить сессию</button>
             </>
           )}

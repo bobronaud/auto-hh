@@ -5,7 +5,6 @@ import {
   type CollectResult,
   type DashboardState,
   type HealthReport,
-  type LettersResult,
   type RunMode,
 } from './api';
 import { dateTime } from './common';
@@ -50,16 +49,6 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
           value={counts.appliedTotal}
           sub={`пробных прогонов ${counts.byStatus.dry_run ?? 0}`}
         />
-        {state.letter.mode === 'llm' && (
-          // Without manual approval nothing is actually waiting: these letters are
-          // written and will be sent as they are. Calling that "на одобрении" sent the
-          // owner looking for an approval screen that had no reason to exist.
-          <Card
-            label={state.letter.requireManualApproval ? 'писем на одобрении' : 'писем готово'}
-            value={counts.lettersAwaitingApproval}
-            sub={state.letter.requireManualApproval ? 'вкладка «очередь»' : 'уйдут с ближайшим откликом'}
-          />
-        )}
       </div>
 
       <div className='section'>
@@ -149,9 +138,8 @@ function SearchText({ text, busy, onSaved }: { text: string; busy: boolean; onSa
  * Режим письма и, для статического, сам текст.
  *
  * Переключатель здесь, потому что это решение про один отклик, а не про конфиг:
- * статический текст уходит как есть и ни от чего не зависит, режим llm требует
- * `npm run letters` заранее — без сгенерированного письма отклик просто не уйдёт,
- * поэтому выбор llm об этом и предупреждает прямо в строке.
+ * статический текст уходит как есть и ни от чего не зависит, в режиме llm письма
+ * пишет сам прогон откликов, а вакансия без письма пропускается и остаётся в очереди.
  *
  * Текст, как и строка поиска, не затирается живым обновлением состояния, пока
  * в поле лежит несохранённый черновик.
@@ -221,8 +209,7 @@ function Letter({ letter, busy, onSaved }: { letter: DashboardState['letter']; b
         <div className='dim'>
           письмо под каждую вакансию, до {letter.maxChars} знаков
           {letter.requireManualApproval ? ' · с ручным одобрением' : ' · без одобрения'}. Отклик сам пишет недостающие
-          письма в начале прогона — отдельная кнопка «письма» нужна, только если хочется сделать это заранее и
-          прочитать. Вакансия, для которой письмо написать не вышло, пропускается и остаётся в очереди.
+          письма в начале прогона. Вакансия, для которой письмо написать не вышло, пропускается и остаётся в очереди.
         </div>
       )}
       {error && <div className='danger-text'>{error}</div>}
@@ -265,7 +252,6 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 const RUN_TITLES: Record<RunMode, string> = {
   collect: 'сбор вакансий',
   apply: 'отклики',
-  letters: 'письма',
   session: 'проверка сессии',
 };
 
@@ -276,7 +262,8 @@ function duration(fromIso: string, toIso: string): string {
   return m > 0 ? `${m} мин ${sec} с` : `${sec} с`;
 }
 
-type Stat = [label: string, value: React.ReactNode];
+/** Optional third element tints the value — only for counts worth noticing. */
+type Stat = [label: string, value: React.ReactNode, tone?: 'ok' | 'warn' | 'danger'];
 
 /** Counts collapse to «ключ: n» pairs; an empty map says nothing, so it is left out. */
 function breakdown(label: string, map: Record<string, number> | undefined): Stat[] {
@@ -309,23 +296,11 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
       if (typeof r.planned !== 'number') return null;
       return [
         ['запланировано', r.planned],
-        ['отправлено', r.applied],
+        ['отправлено', r.applied, 'ok'],
         ['пробных', r.dryRun],
-        ['ручные', r.needsHuman],
+        ['ручные', r.needsHuman, 'warn'],
         ['пропущено', r.skipped],
-        ['неуспешно', r.failed],
-        ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
-      ];
-    }
-    case 'letters': {
-      const r = result as LettersResult;
-      if (typeof r.requested !== 'number') return null;
-      return [
-        ['запрошено', r.requested],
-        ['описаний прочитано', r.detailsFetched],
-        ['написано', r.written],
-        ['отбраковано', r.rejected],
-        ...breakdown('по резюме', r.byResume),
+        ['неуспешно', r.failed, 'danger'],
         ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
       ];
     }
@@ -360,10 +335,10 @@ function LastRun({ run }: { run: NonNullable<DashboardState['lastRun']> }) {
         {!run.ok && <div className='danger-text'>упал: {String(run.result)}</div>}
         {stats && (
           <dl className='run-stats'>
-            {stats.map(([label, value]) => (
+            {stats.map(([label, value, tone]) => (
               <Fragment key={label}>
                 <dt>{label}</dt>
-                <dd className={value === 0 ? 'zero' : undefined}>{value}</dd>
+                <dd className={value === 0 ? 'zero' : tone}>{value}</dd>
               </Fragment>
             ))}
           </dl>

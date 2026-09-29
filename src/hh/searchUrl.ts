@@ -24,7 +24,8 @@ export function buildSearchUrl(search: SearchConfig, page = 0): string {
   if (search.experience) p.set('experience', search.experience)
   if (search.excludedText.length) p.set('excluded_text', search.excludedText.join(', '))
 
-  p.set('search_period', String(search.period))
+  // No search_period at all is how hh's own page says "за всё время".
+  if (search.period > 0) p.set('search_period', String(search.period))
   p.set('order_by', 'publication_time')
   p.set('items_on_page', '50')
   if (page > 0) p.set('page', String(page))

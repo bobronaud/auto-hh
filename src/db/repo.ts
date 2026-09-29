@@ -111,6 +111,14 @@ export interface RunRow {
 }
 
 const now = () => new Date().toISOString()
+
+/**
+ * Which application rows take a vacancy out of the queue: every status except
+ * `dry_run`. A dry run sends nothing to hh, so its row is a record of the rehearsal,
+ * not of an application (invariant 11) — counting it emptied the live queue of every
+ * vacancy that had been rehearsed on, with no way back.
+ */
+const COUNTS_FOR_QUEUE = `a.status <> 'dry_run'`
 const bool = (v: boolean | null | undefined): number | null =>
   v === null || v === undefined ? null : v ? 1 : 0
 
@@ -205,7 +213,7 @@ export class Repo {
       .prepare(
         `UPDATE vacancies SET dismissed_at = ?
          WHERE id = ? AND dismissed_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = vacancies.id)`,
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = vacancies.id AND ${COUNTS_FOR_QUEUE})`,
       )
       .run(now(), id)
     return res.changes > 0
@@ -241,7 +249,8 @@ export class Repo {
   /**
    * Vacancies that have not been answered or ruled out yet, newest first.
    *
-   * Excludes anything with an application of any kind — 'applied' obviously, but also
+   * Excludes anything with an application of any kind except a dry run (see
+   * COUNTS_FOR_QUEUE) — 'applied' obviously, but also
    * 'needs_human' (it is waiting for the human, not for another attempt), 'skipped'
    * and 'failed'. A failed vacancy is deliberately not retried automatically: the
    * usual cause is a stale selector, and retrying in a loop against hh is precisely
@@ -253,7 +262,7 @@ export class Repo {
         `SELECT v.* FROM vacancies v
          WHERE v.archived = 0
            AND v.dismissed_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND ${COUNTS_FOR_QUEUE})
          ORDER BY
            -- Cards that still offer an apply button first: a missing button usually
            -- means we already answered this one, and finding that out costs a full
@@ -277,7 +286,7 @@ export class Repo {
         `SELECT v.* FROM vacancies v
          WHERE v.archived = 0
            AND v.dismissed_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND ${COUNTS_FOR_QUEUE})
            AND NOT EXISTS (SELECT 1 FROM letters l WHERE l.vacancy_id = v.id)
          ORDER BY
            CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,
@@ -302,7 +311,7 @@ export class Repo {
       .prepare(
         `SELECT COUNT(*) AS n FROM letters l
          WHERE l.approved_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = l.vacancy_id)
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = l.vacancy_id AND ${COUNTS_FOR_QUEUE})
            AND NOT EXISTS (SELECT 1 FROM vacancies v WHERE v.id = l.vacancy_id AND v.dismissed_at IS NOT NULL)`,
       )
       .get() as { n: number }
@@ -316,7 +325,7 @@ export class Repo {
         `SELECT COUNT(*) AS n FROM vacancies v
          WHERE v.archived = 0
            AND v.dismissed_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)`,
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND ${COUNTS_FOR_QUEUE})`,
       )
       .get() as { n: number }
     return row.n
@@ -654,7 +663,7 @@ export class Repo {
            ON l.id = (SELECT id FROM letters WHERE vacancy_id = v.id ORDER BY id DESC LIMIT 1)
          WHERE v.archived = 0
            AND v.dismissed_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND ${COUNTS_FOR_QUEUE})
          ORDER BY
            CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,
            CAST(v.hh_id AS INTEGER) DESC

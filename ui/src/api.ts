@@ -16,12 +16,13 @@ export interface LimitState {
   nextSlotAt?: string
 }
 
-export type RunMode = 'collect' | 'apply' | 'letters' | 'session'
+export type RunMode = 'collect' | 'apply' | 'session'
 
 export interface RunState {
   mode: RunMode
   startedAt: string
   limit?: number
+  period?: number
 }
 
 export interface DashboardState {
@@ -38,7 +39,6 @@ export interface DashboardState {
     appliedTotal: number
     appliedDay: number
     appliedHour: number
-    lettersAwaitingApproval: number
     byStatus: Record<string, number>
   }
   letter: { mode: 'static' | 'llm'; maxChars: number; text: string; requireManualApproval: boolean }
@@ -66,15 +66,6 @@ export interface ApplyResult {
   needsHuman: number
   skipped: number
   failed: number
-  stopReason?: string
-}
-
-export interface LettersResult {
-  requested: number
-  detailsFetched: number
-  written: number
-  rejected: number
-  byResume: Record<string, number>
   stopReason?: string
 }
 
@@ -184,7 +175,8 @@ export const api = {
   requeueOne: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/requeue`),
   markApplied: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/mark-applied`),
   requeue: (errorCode?: string) => post<{ requeued: number }>('/api/failed/requeue', { errorCode }),
-  run: (mode: RunMode, limit?: number) => post<{ run: RunState }>(`/api/run/${mode}`, { limit }),
+  run: (mode: RunMode, opts: { limit?: number; period?: number } = {}) =>
+    post<{ run: RunState }>(`/api/run/${mode}`, opts),
   setDryRun: (dryRun: boolean) => post<{ dryRun: boolean }>('/api/config/dry-run', { dryRun }),
   setSearchText: (text: string) => post<{ text: string }>('/api/config/search-text', { text }),
   setLetter: (patch: { mode?: 'static' | 'llm'; text?: string }) =>

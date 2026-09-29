@@ -24,7 +24,6 @@ export interface DashboardState {
     appliedTotal: number
     appliedDay: number
     appliedHour: number
-    lettersAwaitingApproval: number
     byStatus: Record<string, number>
   }
   letter: { mode: 'static' | 'llm'; maxChars: number; text: string; requireManualApproval: boolean }
@@ -66,7 +65,6 @@ export function dashboardState(): DashboardState {
       appliedTotal: byStatus.applied ?? 0,
       appliedDay: repo.countAppliedWithin(24),
       appliedHour: repo.countAppliedWithin(1),
-      lettersAwaitingApproval: repo.countLettersAwaitingApproval(),
       byStatus,
     },
     letter: {

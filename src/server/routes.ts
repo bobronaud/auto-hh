@@ -10,7 +10,9 @@ import { dashboardState } from './state.js'
 import { sseHandler, pingState } from './events.js'
 import { startRun, BusyError, currentRun, type RunMode } from './runner.js'
 
-const RUN_MODES: RunMode[] = ['collect', 'apply', 'letters', 'session']
+const RUN_MODES: RunMode[] = ['collect', 'apply', 'session']
+/** Collect periods the UI offers; 0 is "all time". hh itself only knows 1/3/7/30. */
+const COLLECT_PERIODS = [0, 3, 7]
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   const repo = new Repo()
@@ -159,15 +161,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // --------------------------------------------------------------------- runs
 
-  app.post<{ Params: { mode: string }; Body: { limit?: number } }>('/api/run/:mode', (req, reply) => {
+  app.post<{ Params: { mode: string }; Body: { limit?: number; period?: number } }>('/api/run/:mode', (req, reply) => {
     const mode = req.params.mode as RunMode
     if (!RUN_MODES.includes(mode)) return reply.code(404).send({ error: `unknown run mode: ${mode}` })
 
     const raw = req.body?.limit
     const limit = typeof raw === 'number' && Number.isFinite(raw) ? clamp(Math.trunc(raw), 1, 500) : undefined
 
+    const period = req.body?.period
+    if (period !== undefined && !COLLECT_PERIODS.includes(period)) {
+      return reply.code(400).send({ error: `period must be one of ${COLLECT_PERIODS.join(', ')}` })
+    }
+
     try {
-      return { ok: true, run: startRun(mode, limit) }
+      return { ok: true, run: startRun(mode, { limit, period }) }
     } catch (e) {
       if (e instanceof BusyError) return reply.code(409).send({ error: e.message, running: e.running })
       throw e

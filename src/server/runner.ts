@@ -4,13 +4,15 @@ import { pingState } from './events.js'
 
 const log = logger('ui')
 
-export type RunMode = 'collect' | 'apply' | 'letters' | 'session'
+export type RunMode = 'collect' | 'apply' | 'session'
 
 export interface RunState {
   mode: RunMode
   startedAt: string
-  /** Set for apply/letters: how many were asked for. */
+  /** Set for apply: how many were asked for. */
   limit?: number
+  /** Set for collect: days back to search, 0 for all time. Overrides search.period. */
+  period?: number
 }
 
 export interface RunOutcome {
@@ -48,15 +50,19 @@ export class BusyError extends Error {
  * request that waits that long is a request that times out. Progress reaches the UI
  * over SSE; the outcome lands in `lastRun`.
  */
-export function startRun(mode: RunMode, limit?: number): RunState {
+export function startRun(mode: RunMode, opts: { limit?: number; period?: number } = {}): RunState {
   if (current) throw new BusyError(current)
 
-  const state: RunState = { mode, startedAt: new Date().toISOString(), limit }
+  const { limit, period } = opts
+  const state: RunState = { mode, startedAt: new Date().toISOString(), limit, period }
   current = state
   pingState(`run:${mode}:start`)
-  log.info(`${mode} started${limit !== undefined ? ` (limit ${limit})` : ''}`)
+  log.info(
+    `${mode} started${limit !== undefined ? ` (limit ${limit})` : ''}` +
+      `${period !== undefined ? ` (period ${period === 0 ? 'all time' : `${period}d`})` : ''}`,
+  )
 
-  void execute(mode, limit)
+  void execute(state)
     .then((result) => finish(state, true, result))
     .catch((e: unknown) => {
       log.error(`${mode} failed: ${(e as Error).message}`)
@@ -78,21 +84,19 @@ function finish(state: RunState, ok: boolean, result: unknown): void {
  * way to change settings, so a server that cached it would need a restart after
  * every edit.
  */
-async function execute(mode: RunMode, limit?: number): Promise<unknown> {
+async function execute({ mode, limit, period }: RunState): Promise<unknown> {
   const cfg = loadConfig(true)
 
   switch (mode) {
     case 'collect': {
       const { collect } = await import('../pipeline/collect.js')
-      return await collect(cfg)
+      // The period is picked per run in the UI, not written to the config: it is a
+      // question about this collect ("what's new since last time"), not a setting.
+      return await collect(period === undefined ? cfg : { ...cfg, search: { ...cfg.search, period } })
     }
     case 'apply': {
       const { runApplications } = await import('../pipeline/apply.js')
       return await runApplications(cfg, limit)
-    }
-    case 'letters': {
-      const { writeLetters } = await import('../pipeline/letters.js')
-      return await writeLetters(cfg, limit ?? cfg.letter.batchSize)
     }
     case 'session': {
       const { health } = await import('../hh/auth.js')

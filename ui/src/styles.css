@@ -15,6 +15,8 @@
   /* Cascadia Mono is Windows Terminal's default face; bundled via @fontsource. */
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
   color-scheme: dark;
+  /* Native controls (checkboxes, fallback select list) default to the OS blue. */
+  accent-color: var(--muted);
 }
 
 * { box-sizing: border-box; }
@@ -67,7 +69,9 @@ header {
 
 .spacer { flex: 1; }
 
-.runbar { display: flex; align-items: center; gap: 8px; }
+/* stretch, not center: inputs and a select render shorter than a button with the
+   same padding, and side by side the difference is what the eye catches. */
+.runbar { display: flex; align-items: stretch; gap: 8px; }
 
 button {
   font: inherit;
@@ -86,7 +90,7 @@ button.small { padding: 3px 8px; font-size: 14px; }
 
 input[type="number"], input[type="text"], select {
   font: inherit;
-  padding: 5px 8px;
+  padding: 6px 8px;
   width: 72px;
   border-radius: 6px;
   border: 1px solid var(--line);
@@ -94,6 +98,41 @@ input[type="number"], input[type="text"], select {
   color: var(--text);
 }
 select, input[type="text"] { width: auto; }
+/* The native arrow sits flush with the right edge and ignores padding, so it is
+   replaced with a chevron drawn from two gradients — it takes its colour from the
+   theme, which an SVG data URI could not. */
+select {
+  appearance: none;
+  padding-right: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 55%, calc(100% - 12px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+select:focus-visible { outline: 1px solid var(--muted); outline-offset: 1px; }
+
+/* The open list is drawn by the browser, and its highlight is the OS blue. Where the
+   customizable select exists (Chromium 135+), the list is ours and takes the palette:
+   grey for hover and for the chosen option. Elsewhere the native list stays. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select::picker-icon { display: none; }
+  ::picker(select) {
+    margin-top: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text);
+  }
+  option { padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+  option::checkmark { display: none; }
+  option:checked { background: var(--line); }
+  option:hover, option:focus-visible { background: var(--panel-2); color: var(--accent); outline: none; }
+}
 
 /* --------------------------------------------------------------------- tabs */
 
@@ -415,4 +454,7 @@ pre.json {
 .run-stats dt { color: var(--muted); }
 .run-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
 .run-stats dd.zero { color: var(--muted); }
+.run-stats dd.ok { color: var(--ok); font-weight: 600; }
+.run-stats dd.warn { color: var(--warn); font-weight: 600; }
+.run-stats dd.danger { color: var(--danger); font-weight: 600; }
 .run-json { margin-top: 10px; }

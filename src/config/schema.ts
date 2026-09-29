@@ -20,8 +20,8 @@ const searchSchema = z.object({
   excludedText: z.array(z.string()).default([]),
   /** hh work_format: REMOTE | HYBRID | ON_SITE | FIELD_WORK */
   workFormat: z.array(z.enum(['REMOTE', 'HYBRID', 'ON_SITE', 'FIELD_WORK'])).default([]),
-  /** Days back to search. */
-  period: z.number().int().min(1).max(30).default(7),
+  /** Days back to search. 0 means no period at all — hh then searches all time. */
+  period: z.number().int().min(0).max(30).default(7),
   /** Max result pages to walk. Each page is one navigation — see §1.4. */
   maxPages: z.number().int().min(1).max(40).default(5),
 })
