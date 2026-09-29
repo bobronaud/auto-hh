@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react';
-import { api, type DashboardState } from './api';
+import { Fragment, useEffect, useState } from 'react';
+import {
+  api,
+  type ApplyResult,
+  type CollectResult,
+  type DashboardState,
+  type HealthReport,
+  type LettersResult,
+  type RunMode,
+} from './api';
 import { dateTime } from './common';
 
 export function Dashboard({ state, onChange }: { state: DashboardState; onChange: () => void }) {
@@ -29,9 +37,14 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
           sub='вопросы, тестовые, внешние формы'
           tone={counts.needsHuman > 0 ? 'warn' : undefined}
         />
-        {/* Неуспешные красные всегда, даже на нуле: это единственная очередь, которую
-            никто не разгребает сам — её видно, только если она заметна. */}
-        <Card label='неуспешные' value={counts.failed} sub='лимит не тратят' tone='danger' />
+        {/* Красная, только когда есть что разбирать: на нуле красный цвет сигналит
+            о проблеме, которой нет. */}
+        <Card
+          label='неуспешные'
+          value={counts.failed}
+          sub='лимит не тратят'
+          tone={counts.failed > 0 ? 'danger' : undefined}
+        />
         <Card
           label='откликов всего'
           value={counts.appliedTotal}
@@ -63,17 +76,7 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
         </table>
       </div>
 
-      {state.lastRun && (
-        <div className='section'>
-          <h2>последний прогон</h2>
-          <div className={`notice ${state.lastRun.ok ? 'info' : 'danger'}`}>
-            <b>{state.lastRun.mode}</b> · {dateTime(state.lastRun.startedAt)} → {dateTime(state.lastRun.finishedAt)}
-            <pre className='json' style={{ marginTop: 8 }}>
-              {JSON.stringify(state.lastRun.result, null, 2)}
-            </pre>
-          </div>
-        </div>
-      )}
+      {state.lastRun && <LastRun run={state.lastRun} />}
     </>
   );
 }
@@ -256,5 +259,127 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
       </td>
       <td>{children}</td>
     </tr>
+  );
+}
+
+const RUN_TITLES: Record<RunMode, string> = {
+  collect: 'сбор вакансий',
+  apply: 'отклики',
+  letters: 'письма',
+  session: 'проверка сессии',
+};
+
+function duration(fromIso: string, toIso: string): string {
+  const total = Math.max(0, Math.round((Date.parse(toIso) - Date.parse(fromIso)) / 1000));
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return m > 0 ? `${m} мин ${sec} с` : `${sec} с`;
+}
+
+type Stat = [label: string, value: React.ReactNode];
+
+/** Counts collapse to «ключ: n» pairs; an empty map says nothing, so it is left out. */
+function breakdown(label: string, map: Record<string, number> | undefined): Stat[] {
+  const entries = Object.entries(map ?? {});
+  if (entries.length === 0) return [];
+  return [[label, entries.map(([k, n]) => `${k}: ${n}`).join(' · ')]];
+}
+
+/**
+ * The run's result as label/value rows. Returns null for a shape it doesn't know —
+ * the caller then falls back to JSON rather than showing a half-empty list.
+ */
+function runStats(mode: RunMode, result: unknown): Stat[] | null {
+  if (typeof result !== 'object' || result === null) return null;
+  switch (mode) {
+    case 'collect': {
+      const r = result as CollectResult;
+      if (typeof r.scraped !== 'number') return null;
+      return [
+        ['собрано с выдачи', r.scraped],
+        ['сохранено', r.stored],
+        ['прошло фильтры', r.kept],
+        ['нужна страница вакансии', r.needDetail],
+        ...breakdown('отсеяно', r.dropped),
+        ...breakdown('по резюме', r.byResume),
+      ];
+    }
+    case 'apply': {
+      const r = result as ApplyResult;
+      if (typeof r.planned !== 'number') return null;
+      return [
+        ['запланировано', r.planned],
+        ['отправлено', r.applied],
+        ['пробных', r.dryRun],
+        ['ручные', r.needsHuman],
+        ['пропущено', r.skipped],
+        ['неуспешно', r.failed],
+        ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
+      ];
+    }
+    case 'letters': {
+      const r = result as LettersResult;
+      if (typeof r.requested !== 'number') return null;
+      return [
+        ['запрошено', r.requested],
+        ['описаний прочитано', r.detailsFetched],
+        ['написано', r.written],
+        ['отбраковано', r.rejected],
+        ...breakdown('по резюме', r.byResume),
+        ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
+      ];
+    }
+    case 'session': {
+      const r = result as HealthReport;
+      if (typeof r.loggedIn !== 'boolean') return null;
+      return [
+        ['вход', r.loggedIn ? 'да' : 'нет'],
+        ['состояние', r.state],
+        [
+          'страница',
+          <a href={r.url} target='_blank' rel='noreferrer'>
+            {r.url}
+          </a>,
+        ],
+      ];
+    }
+  }
+}
+
+/** Last run as readable text; the raw result stays one click away for debugging. */
+function LastRun({ run }: { run: NonNullable<DashboardState['lastRun']> }) {
+  const [showJson, setShowJson] = useState(false);
+  const stats = run.ok ? runStats(run.mode, run.result) : null;
+
+  return (
+    <div className='section'>
+      <h2>последний прогон</h2>
+      <div className={`notice ${run.ok ? 'info' : 'danger'}`}>
+        <b>{RUN_TITLES[run.mode] ?? run.mode}</b> · {dateTime(run.startedAt)} → {dateTime(run.finishedAt)}
+        <span className='dim'> · {duration(run.startedAt, run.finishedAt)}</span>
+        {!run.ok && <div className='danger-text'>упал: {String(run.result)}</div>}
+        {stats && (
+          <dl className='run-stats'>
+            {stats.map(([label, value]) => (
+              <Fragment key={label}>
+                <dt>{label}</dt>
+                <dd className={value === 0 ? 'zero' : undefined}>{value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        )}
+        {run.ok && !stats && <div className='dim' style={{ marginTop: 6 }}>итог в незнакомом виде — см. JSON</div>}
+        <div className='run-json'>
+          <button className='small' onClick={() => setShowJson((v) => !v)}>
+            {showJson ? 'скрыть JSON' : 'показать JSON'}
+          </button>
+          {showJson && (
+            <pre className='json' style={{ marginTop: 8 }}>
+              {JSON.stringify(run.result, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

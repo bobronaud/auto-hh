@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS vacancies (
   description              TEXT,
   raw_json                 TEXT,
   found_at                 TEXT    NOT NULL,
-  detail_fetched_at        TEXT
+  detail_fetched_at        TEXT,
+  -- Убрана из очереди руками (нерелевантная или проблемная). Отдельная колонка, а не
+  -- строка в applications (инвариант 11) и не archived: upsert при сборе перезаписывает
+  -- archived, а эту колонку не трогает, поэтому вакансия не возвращается в очередь.
+  dismissed_at             TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_vacancies_found_at ON vacancies (found_at);
 

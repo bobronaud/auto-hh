@@ -3,16 +3,42 @@ import { api, screenshotUrl, type DashboardState, type HistoryRow, type PendingR
 import { CopyPath, Empty, ErrorLine, Lightbox, Modal, VacancyLink, dateTime, useFetch } from './common'
 
 /** Pending queue, in the exact order the next run will walk it. */
-export function Pending({ version, state }: { version: number; state: DashboardState }) {
+export function Pending({
+  version,
+  state,
+  onChange,
+}: {
+  version: number
+  state: DashboardState
+  onChange: () => void
+}) {
   const { data, error, reload } = useFetch(() => api.pending(200), [version])
+  const [busy, setBusy] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   if (error) return <ErrorLine error={error} />
   if (!data) return <Empty>загрузка…</Empty>
   if (data.rows.length === 0) return <Empty>очередь пуста — соберите вакансии</Empty>
 
   const llm = state.letter.mode === 'llm'
 
+  // Dismissed for good: collect never brings it back (see repo.dismissVacancy).
+  const dismiss = async (id: number): Promise<void> => {
+    setBusy(id)
+    setActionError(null)
+    try {
+      await api.dismissVacancy(id)
+      reload()
+      onChange()
+    } catch (e) {
+      setActionError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <>
+      <ErrorLine error={actionError} />
       <p className="dim">
         {data.total} вакансий ждут отклика. Порядок тот же, в котором их возьмёт прогон: сначала те,
         где в карточке была кнопка отклика, дальше по свежести объявления.
@@ -31,6 +57,7 @@ export function Pending({ version, state }: { version: number; state: DashboardS
             <th>кнопка</th>
             {llm && <th>письмо</th>}
             <th className="num">найдена</th>
+            <th />
           </tr>
         </thead>
         <tbody>
@@ -50,6 +77,19 @@ export function Pending({ version, state }: { version: number; state: DashboardS
                 </td>
               )}
               <td className="num dim nowrap">{dateTime(v.found_at)}</td>
+              <td>
+                <button
+                  className="small danger"
+                  disabled={busy !== null || !!state.run}
+                  title={
+                    state.run
+                      ? 'идёт прогон — удалить можно после него'
+                      : 'убрать из очереди насовсем: при следующем сборе не вернётся'
+                  }
+                  onClick={() => void dismiss(v.id)}>
+                  удалить
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

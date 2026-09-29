@@ -1,16 +1,20 @@
 :root {
-  --bg: #f5f7fa;
-  --panel: #ffffff;
-  --panel-2: #eef1f6;
-  --line: #dce1e9;
-  --text: #1b2330;
-  --muted: #667085;
-  --accent: #1461c4;
-  --ok: #167a45;
-  --warn: #8a5d00;
-  --danger: #c22a36;
-  --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-  color-scheme: light;
+  /* Windows Terminal (Campbell) palette: neutral blacks and greys, no blue cast.
+     Accent is a light grey, not a colour — highlight comes from brightness. */
+  --bg: #0c0c0c;
+  --panel: #1a1a1a;
+  --panel-2: #262626;
+  --line: #333333;
+  --text: #e0e0e0;
+  --muted: #a8a8a8;
+  --accent: #e6e6e6;
+  --accent-text: #0c0c0c;
+  --ok: #16c60c;
+  --warn: #c19c00;
+  --danger: #e74856;
+  /* Cascadia Mono is Windows Terminal's default face; bundled via @fontsource. */
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -19,11 +23,11 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 16px/1.55 var(--mono);
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--accent); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--accent); }
 
 .app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
 
@@ -40,24 +44,25 @@ header {
 }
 
 .brand { font-weight: 600; letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; }
-.brand .logo { width: 22px; height: 22px; flex: none; border-radius: 4px; }
+/* The logo is a black circle with white letters; inverted, it reads on the dark header. */
+.brand .logo { width: 22px; height: 22px; flex: none; border-radius: 50%; filter: invert(1); }
 .brand small { color: var(--muted); font-weight: 400; margin-left: 8px; }
 
 .badge {
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   border: 1px solid transparent;
 }
-.badge.live { background: #fdeaec; color: var(--danger); border-color: var(--danger); }
-.badge.dry { background: #e6f5ec; color: var(--ok); border-color: var(--ok); }
+.badge.live { background: rgba(231, 72, 86, 0.14); color: var(--danger); border-color: var(--danger); }
+.badge.dry { background: rgba(22, 198, 12, 0.14); color: var(--ok); border-color: var(--ok); }
 .badge.neutral { background: var(--panel-2); color: var(--muted); border-color: var(--line); }
-.badge.warn { background: #fbf1dc; color: var(--warn); border-color: var(--warn); }
-.badge.ok { background: #e6f5ec; color: var(--ok); border-color: var(--ok); }
+.badge.warn { background: rgba(193, 156, 0, 0.14); color: var(--warn); border-color: var(--warn); }
+.badge.ok { background: rgba(22, 198, 12, 0.14); color: var(--ok); border-color: var(--ok); }
 
-.badge.toggle { cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
-.badge.toggle:hover:not(:disabled) { filter: brightness(0.96); }
+.badge.toggle { cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; }
+.badge.toggle:hover:not(:disabled) { filter: brightness(1.15); }
 .badge.toggle:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .spacer { flex: 1; }
@@ -75,9 +80,9 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 button.danger { color: var(--danger); }
-button.small { padding: 3px 8px; font-size: 12px; }
+button.small { padding: 3px 8px; font-size: 14px; }
 
 input[type="number"], input[type="text"], select {
   font: inherit;
@@ -108,12 +113,12 @@ nav button {
   border-bottom: 2px solid transparent;
 }
 nav button.active { color: var(--text); border-bottom-color: var(--accent); }
-nav button .count { color: var(--muted); font-size: 12px; margin-left: 6px; }
+nav button .count { color: var(--muted); font-size: 14px; margin-left: 6px; }
 nav button.active .count { color: var(--accent); }
 
 /* ------------------------------------------------------------------- layout */
 
-.body { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+.body { display: grid; grid-template-columns: 1fr 480px; min-height: 0; }
 main { overflow: auto; padding: 20px; }
 
 /* ------------------------------------------------------------------- panels */
@@ -127,18 +132,18 @@ main { overflow: auto; padding: 20px; }
   border-radius: 10px;
   padding: 14px 16px;
 }
-.card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-.card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
-.card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.card.ok { background: #e9f6ef; border-color: #a9d9be; }
-.card.warn { background: #fdf4e0; border-color: #eed7a1; }
-.card.danger { background: #fdebed; border-color: #f0bcc1; }
-.card.ok .label, .card.ok .sub { color: #3d7a58; }
-.card.warn .label, .card.warn .sub { color: #7d6021; }
-.card.danger .label, .card.danger .sub { color: #9c4750; }
+.card .label { color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; }
+.card .value { font-size: 30px; font-weight: 600; margin-top: 4px; }
+.card .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.card.ok { background: rgba(22, 198, 12, 0.1); border-color: rgba(22, 198, 12, 0.4); }
+.card.warn { background: rgba(193, 156, 0, 0.1); border-color: rgba(193, 156, 0, 0.4); }
+.card.danger { background: rgba(231, 72, 86, 0.1); border-color: rgba(231, 72, 86, 0.4); }
+.card.ok .label, .card.ok .sub { color: #7ddc76; }
+.card.warn .label, .card.warn .sub { color: var(--warn); }
+.card.danger .label, .card.danger .sub { color: var(--danger); }
 
 .section { margin-top: 24px; }
-.section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 10px; }
+.section h2 { font-size: 17px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 10px; }
 
 .notice {
   border: 1px solid var(--line);
@@ -157,7 +162,7 @@ main { overflow: auto; padding: 20px; }
 table { width: 100%; border-collapse: collapse; }
 th {
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -172,23 +177,23 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: to
 tr:hover td { background: var(--panel); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .dim { color: var(--muted); }
-.mono { font-family: var(--mono); font-size: 12px; }
+.mono { font-family: var(--mono); font-size: 14px; }
 .nowrap { white-space: nowrap; }
 .empty { color: var(--muted); padding: 24px 0; }
 
 /* Строка поиска правится прямо здесь — поле занимает всю ширину ячейки,
    запрос длинный и его надо видеть целиком. */
 .search-text { display: flex; gap: 8px; align-items: center; }
-.search-text input[type="text"] { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.search-text input[type="text"] { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; }
 .danger-text { color: var(--danger); margin-top: 6px; }
 
 /* Переключатель режима письма: две кнопки-сегмента, выбранная утоплена. */
 .modes { display: flex; gap: 6px; margin-bottom: 8px; }
-.modes button.active { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 600; opacity: 1; }
+.modes button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; opacity: 1; }
 .letter-text textarea {
   font: inherit;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 14px;
   width: 100%;
   padding: 6px 8px;
   border-radius: 6px;
@@ -210,7 +215,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .copy-path:hover { border-style: solid; border-color: var(--accent); }
 
-.status { font-size: 12px; font-weight: 600; }
+.status { font-size: 14px; font-weight: 600; }
 .status.applied { color: var(--ok); }
 .status.failed { color: var(--danger); }
 .status.needs_human { color: var(--warn); }
@@ -231,7 +236,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(20, 26, 36, 0.72);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -256,7 +261,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   width: 34px;
   height: 34px;
   padding: 0;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
 }
 .lightbox-hint {
@@ -266,7 +271,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   right: 0;
   text-align: center;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 /* ------------------------------------------------------------------- modal */
@@ -275,7 +280,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(20, 26, 36, 0.72);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -304,7 +309,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: none;
   border: none;
   padding: 2px 6px;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   color: var(--muted);
 }
@@ -315,7 +320,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .modal-hint {
   padding: 0 16px 12px;
-  font-size: 12px;
+  font-size: 14px;
 }
 /* Paragraph breaks come through as they were written — the letter is read, not parsed. */
 .letter-view {
@@ -347,7 +352,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .log {
   border-left: 1px solid var(--line);
-  background: #fbfcfe;
+  background: var(--panel);
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
@@ -356,15 +361,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: none;
   border-bottom: 1px solid var(--line);
   padding: 10px 14px;
-  font-size: 12px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-.log .lines { overflow: auto; padding: 8px 12px; font-family: var(--mono); font-size: 12px; }
+.log .lines { overflow: auto; padding: 8px 12px; font-family: var(--mono); font-size: 14px; }
 .log .line { display: flex; gap: 8px; padding: 1px 0; align-items: baseline; }
 .log .time, .log .scope { flex: none; white-space: nowrap; }
-.log .time { color: #8a93a3; }
+.log .time { color: var(--muted); }
 /* Колонка источника фиксированной ширины: сообщения всех строк начинаются с одного
    места, иначе текст прыгает влево-вправо на каждой строке («ui» против «collect»).
    Ширина в ch по самому длинному из имён (browser, collect); что длиннее — режется
@@ -382,7 +387,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 pre.json {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -399,3 +404,15 @@ pre.json {
   .body { grid-template-columns: 1fr; grid-template-rows: 1fr 280px; }
   .log { border-left: none; border-top: 1px solid var(--line); }
 }
+
+/* Last run, read as text: label / value pairs in two columns. */
+.run-stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 10px 0 0;
+}
+.run-stats dt { color: var(--muted); }
+.run-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.run-stats dd.zero { color: var(--muted); }
+.run-json { margin-top: 10px; }

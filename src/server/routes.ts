@@ -29,6 +29,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { total: repo.countPending(), limit, offset, rows: repo.pendingPage(limit, offset) }
   })
 
+  /**
+   * Remove one vacancy from the queue by hand. Refused during a run: the run took its
+   * candidates at the start, so a vacancy dismissed halfway could still be applied to.
+   */
+  app.post<{ Params: { id: string } }>('/api/vacancies/:id/dismiss', (req, reply) => {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad vacancy id' })
+
+    const running = currentRun()
+    if (running) {
+      return reply.code(409).send({ error: `${running.mode} is running — wait for it to finish`, running })
+    }
+    if (!repo.dismissVacancy(id)) return reply.code(409).send({ error: 'vacancy is not in the queue' })
+    pingState('vacancy:dismissed')
+    return { ok: true, id }
+  })
+
   app.get<{ Querystring: { includeResolved?: string } }>('/api/queue/needs-human', (req) => ({
     rows: repo.needsHuman({ includeResolved: req.query.includeResolved === 'true' }),
   }))

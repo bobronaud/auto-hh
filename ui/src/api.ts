@@ -49,6 +49,42 @@ export interface DashboardState {
   lastRun: { mode: RunMode; startedAt: string; finishedAt: string; ok: boolean; result: unknown } | null
 }
 
+/** Mirrors of the pipeline results (src/pipeline/*, src/hh/auth.ts) — what `lastRun.result` holds. */
+export interface CollectResult {
+  scraped: number
+  stored: number
+  kept: number
+  dropped: Record<string, number>
+  byResume: Record<string, number>
+  needDetail: number
+}
+
+export interface ApplyResult {
+  planned: number
+  applied: number
+  dryRun: number
+  needsHuman: number
+  skipped: number
+  failed: number
+  stopReason?: string
+}
+
+export interface LettersResult {
+  requested: number
+  detailsFetched: number
+  written: number
+  rejected: number
+  byResume: Record<string, number>
+  stopReason?: string
+}
+
+export interface HealthReport {
+  loggedIn: boolean
+  state: string
+  url: string
+  screenshot?: string
+}
+
 export interface VacancyRow {
   id: number
   hh_id: string
@@ -144,6 +180,7 @@ export const api = {
   resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
   approveLetter: (id: number, text?: string) =>
     post<{ ok: true; id: number }>(`/api/letters/${id}/approve`, text === undefined ? {} : { text }),
+  dismissVacancy: (id: number) => post<{ ok: true; id: number }>(`/api/vacancies/${id}/dismiss`),
   requeueOne: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/requeue`),
   markApplied: (id: number) => post<{ ok: true; id: number }>(`/api/failed/${id}/mark-applied`),
   requeue: (errorCode?: string) => post<{ requeued: number }>('/api/failed/requeue', { errorCode }),

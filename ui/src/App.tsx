@@ -82,7 +82,7 @@ export function App() {
       <header>
         <div className='brand'>
           <img className='logo' src={logo} alt='' />
-          HeadHunter-Hunter
+          AutoHH
         </div>
         <button
           className={`badge toggle ${state.dryRun ? 'dry' : 'live'}`}
@@ -153,7 +153,7 @@ export function App() {
         <main>
           <ErrorLine error={runError} />
           {tab === 'dashboard' && <Dashboard state={state} onChange={bump} />}
-          {tab === 'pending' && <Pending version={version} state={state} />}
+          {tab === 'pending' && <Pending version={version} state={state} onChange={bump} />}
           {tab === 'needs_human' && <NeedsHuman version={version} onChange={bump} />}
           {tab === 'failed' && <Failures version={version} onChange={bump} />}
           {tab === 'history' && <History version={version} />}

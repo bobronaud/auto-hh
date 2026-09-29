@@ -36,6 +36,7 @@ export interface VacancyRow {
   description: string | null
   found_at: string
   detail_fetched_at: string | null
+  dismissed_at: string | null
 }
 
 export type ApplicationStatus =
@@ -190,6 +191,26 @@ export class Repo {
       .run(patch.description ?? null, bool(patch.hasTest), bool(patch.responseLetterRequired), now(), id)
   }
 
+  /**
+   * Take one vacancy out of the queue by hand — irrelevant or problematic.
+   *
+   * A column on the vacancy, not an `applications` row: nothing happened on hh, and a
+   * fake application would count as one (invariant 11). Not `archived` either: upsert
+   * overwrites that on every collect, while `dismissed_at` is never touched by it, so
+   * the vacancy stays out of the queue when the search finds it again. Only a pending
+   * vacancy can be dismissed — one with an application is already out of the queue.
+   */
+  dismissVacancy(id: number): boolean {
+    const res = this.db
+      .prepare(
+        `UPDATE vacancies SET dismissed_at = ?
+         WHERE id = ? AND dismissed_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = vacancies.id)`,
+      )
+      .run(now(), id)
+    return res.changes > 0
+  }
+
   /** An archived vacancy drops out of every queue: it cannot be applied to. */
   markArchived(id: number): void {
     this.db.prepare('UPDATE vacancies SET archived = 1, detail_fetched_at = ? WHERE id = ?').run(now(), id)
@@ -231,6 +252,7 @@ export class Repo {
       .prepare(
         `SELECT v.* FROM vacancies v
          WHERE v.archived = 0
+           AND v.dismissed_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
          ORDER BY
            -- Cards that still offer an apply button first: a missing button usually
@@ -254,6 +276,7 @@ export class Repo {
       .prepare(
         `SELECT v.* FROM vacancies v
          WHERE v.archived = 0
+           AND v.dismissed_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
            AND NOT EXISTS (SELECT 1 FROM letters l WHERE l.vacancy_id = v.id)
          ORDER BY
@@ -279,7 +302,8 @@ export class Repo {
       .prepare(
         `SELECT COUNT(*) AS n FROM letters l
          WHERE l.approved_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = l.vacancy_id)`,
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = l.vacancy_id)
+           AND NOT EXISTS (SELECT 1 FROM vacancies v WHERE v.id = l.vacancy_id AND v.dismissed_at IS NOT NULL)`,
       )
       .get() as { n: number }
     return row.n
@@ -291,6 +315,7 @@ export class Repo {
       .prepare(
         `SELECT COUNT(*) AS n FROM vacancies v
          WHERE v.archived = 0
+           AND v.dismissed_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)`,
       )
       .get() as { n: number }
@@ -628,6 +653,7 @@ export class Repo {
          LEFT JOIN letters l
            ON l.id = (SELECT id FROM letters WHERE vacancy_id = v.id ORDER BY id DESC LIMIT 1)
          WHERE v.archived = 0
+           AND v.dismissed_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id)
          ORDER BY
            CASE WHEN v.can_apply_from_list = 0 THEN 1 ELSE 0 END,

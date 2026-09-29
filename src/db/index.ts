@@ -33,6 +33,7 @@ function migrate(db: Database.Database): void {
     ['applications', 'needs_human_reason', 'TEXT'],
     ['applications', 'resolved_at', 'TEXT'],
     ['vacancies', 'can_apply_from_list', 'INTEGER'],
+    ['vacancies', 'dismissed_at', 'TEXT'],
   ]
   for (const [table, column, type] of added) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
