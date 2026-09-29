@@ -52,11 +52,10 @@ export interface DashboardState {
 /** Mirrors of the pipeline results (src/pipeline/*, src/hh/auth.ts) — what `lastRun.result` holds. */
 export interface CollectResult {
   scraped: number
-  stored: number
-  kept: number
+  queued: number
+  handled: number
   dropped: Record<string, number>
   byResume: Record<string, number>
-  needDetail: number
 }
 
 export interface ApplyResult {
@@ -178,7 +177,6 @@ export const api = {
   run: (mode: RunMode, opts: { limit?: number; period?: number } = {}) =>
     post<{ run: RunState }>(`/api/run/${mode}`, opts),
   setDryRun: (dryRun: boolean) => post<{ dryRun: boolean }>('/api/config/dry-run', { dryRun }),
-  setSearchText: (text: string) => post<{ text: string }>('/api/config/search-text', { text }),
   setLetter: (patch: { mode?: 'static' | 'llm'; text?: string }) =>
     post<{ mode?: string; text?: string }>('/api/config/letter', patch),
 }

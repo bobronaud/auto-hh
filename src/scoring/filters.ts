@@ -1,6 +1,6 @@
 import type { Config } from '../config/schema.js'
 import type { ScrapedCard } from '../hh/search.js'
-import { countMatchingWords } from './textMatch.js'
+import { countMatchingWords, normalizeText } from './textMatch.js'
 
 /**
  * Cheap local filters, applied before anything expensive (RESEARCH §3.2).
@@ -29,7 +29,7 @@ export interface FilterVerdict {
   reason?: DropReason
 }
 
-const lc = (s: string | null | undefined) => (s ?? '').toLocaleLowerCase('ru')
+const lc = (s: string | null | undefined) => normalizeText(s ?? '').toLocaleLowerCase('ru')
 
 export function filterCard(
   card: ScrapedCard,

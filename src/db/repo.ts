@@ -177,6 +177,31 @@ export class Repo {
     return row.id
   }
 
+  /** Record a vacancy the filters dropped, for later analysis. Never queued. */
+  recordDropped(v: VacancyInput, reason: string): void {
+    const t = now()
+    this.db
+      .prepare(
+        `INSERT INTO dropped_vacancies (hh_id, title, company, url, area, snippet, reason,
+                                        first_seen_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (hh_id) DO UPDATE SET
+           title        = excluded.title,
+           company      = COALESCE(excluded.company, dropped_vacancies.company),
+           url          = excluded.url,
+           area         = COALESCE(excluded.area, dropped_vacancies.area),
+           snippet      = COALESCE(excluded.snippet, dropped_vacancies.snippet),
+           reason       = excluded.reason,
+           last_seen_at = excluded.last_seen_at,
+           seen_count   = dropped_vacancies.seen_count + 1`,
+      )
+      .run(v.hhId, v.title, v.company ?? null, v.url, v.area ?? null, v.snippet ?? null, reason, t, t)
+  }
+
+  getVacancy(id: number): VacancyRow | undefined {
+    return this.db.prepare('SELECT * FROM vacancies WHERE id = ?').get(id) as VacancyRow | undefined
+  }
+
   getVacancyByHhId(hhId: string): VacancyRow | undefined {
     return this.db.prepare('SELECT * FROM vacancies WHERE hh_id = ?').get(hhId) as
       | VacancyRow
@@ -272,6 +297,20 @@ export class Repo {
          LIMIT ?`,
       )
       .all(limit) as VacancyRow[]
+  }
+
+  /** Would pendingVacancies pick this vacancy up? Same conditions, one row. */
+  isQueued(id: number): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM vacancies v
+         WHERE v.id = ?
+           AND v.archived = 0
+           AND v.dismissed_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND ${COUNTS_FOR_QUEUE})`,
+      )
+      .get(id)
+    return row !== undefined
   }
 
   /**

@@ -10,11 +10,18 @@ const log = logger('collect')
 
 export interface CollectResult {
   scraped: number
-  stored: number
-  kept: number
+  /** Passed the filters and is waiting in the queue after this collect. */
+  queued: number
+  /**
+   * Passed the filters but the queue will not take it: already dealt with in some way
+   * other than an application — parked for manual work, skipped, failed, dismissed.
+   * The filters only know about 'applied', so without this count those looked like
+   * fresh additions to the queue.
+   */
+  handled: number
   dropped: Record<string, number>
+  /** Resume routing of the queued vacancies, by title. */
   byResume: Record<string, number>
-  needDetail: number
 }
 
 /**
@@ -32,25 +39,26 @@ export async function collect(cfg: Config): Promise<CollectResult> {
     log.info(`scraped ${cards.length} unique vacancies`)
 
     const appliedIds = repo.appliedHhIds()
-    const { kept, counts } = applyFilters(cards, cfg, appliedIds)
+    const { kept, dropped, counts } = applyFilters(cards, cfg, appliedIds)
+
+    // Kept for analysis in the database only: which titles the keyword list misses.
+    for (const d of dropped) if (d.reason === 'not_frontend') repo.recordDropped(d.card, d.reason)
 
     const byResume: Record<string, number> = {}
-    let stored = 0
-    let needDetail = 0
+    let queued = 0
 
     for (const card of kept) {
-      repo.upsertVacancy(card)
-      stored++
+      const id = repo.upsertVacancy(card)
+      if (!repo.isQueued(id)) continue
+      queued++
 
-      // Route on the title alone. When the title is not decisive the description is
-      // needed — but reading it costs a navigation, so that is deferred to the apply
-      // step rather than spent here on vacancies that may never be applied to.
+      // Route on the title alone: the description is read later, at apply time, and
+      // only for vacancies that actually get answered.
       const route = routeResume(cfg, { title: card.title })
       byResume[route.resume.id] = (byResume[route.resume.id] ?? 0) + 1
-      if (!route.decidedByTitle) needDetail++
     }
 
-    return { scraped: cards.length, stored, kept: kept.length, dropped: counts, byResume, needDetail }
+    return { scraped: cards.length, queued, handled: kept.length - queued, dropped: counts, byResume }
   } finally {
     await ctx.close()
   }
@@ -58,7 +66,8 @@ export async function collect(cfg: Config): Promise<CollectResult> {
 
 export function printCollectResult(r: CollectResult): void {
   console.log(`\n  scraped   ${r.scraped}`)
-  console.log(`  kept      ${r.kept}`)
+  console.log(`  queued    ${r.queued}`)
+  if (r.handled > 0) console.log(`  handled   ${r.handled} already dealt with (manual, skipped, failed, dismissed)`)
 
   const droppedTotal = Object.values(r.dropped).reduce((a, b) => a + b, 0)
   if (droppedTotal > 0) {
@@ -72,9 +81,6 @@ export function printCollectResult(r: CollectResult): void {
   console.log(`\n  routing (by title):`)
   for (const [id, n] of Object.entries(r.byResume).sort((a, b) => b[1] - a[1])) {
     console.log(`              ${String(n).padStart(4)}  ${id}`)
-  }
-  if (r.needDetail > 0) {
-    console.log(`\n  ${r.needDetail} vacancies need their description read before routing is certain.`)
   }
   console.log()
 }

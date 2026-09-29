@@ -39,7 +39,7 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
   // In a dry run the rolling window is irrelevant — nothing is sent, so nothing is
   // consumed. Cap it anyway so a rehearsal stays a rehearsal.
   const budget = cfg.dryRun ? (limit ?? 5) : Math.min(limiter.budget(), limit ?? Number.MAX_SAFE_INTEGER)
-  const candidates = repo.pendingVacancies(budget)
+  let candidates = repo.pendingVacancies(budget)
 
   log.info(`${candidates.length} candidates, budget ${budget}${cfg.dryRun ? ' (DRY RUN — nothing will be sent)' : ''}`)
 
@@ -75,6 +75,14 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
         result.stopReason = written.stopReason
         return result
       }
+      // The letters step read the vacancy pages and stored what it found, but these
+      // rows were loaded before that. Without a re-read the resume below is picked on
+      // the title alone while the letter was aimed using the description, and a
+      // vacancy found archived would still be opened for an application.
+      candidates = candidates
+        .map((v) => repo.getVacancy(v.id) ?? v)
+        .filter((v) => !v.archived)
+      result.planned = candidates.length
     }
   }
 

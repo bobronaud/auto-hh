@@ -49,24 +49,6 @@ export function setDryRun(dryRun: boolean): boolean {
 }
 
 /**
- * The hh search query.
- *
- * Editable from the UI because it is the one setting that decides how many vacancies
- * exist to apply to at all — the goal is coverage, and widening the query is the
- * cheapest way to get it. Only `search.text` is touched; the rest of the search block
- * is copied through untouched.
- */
-export function setSearchText(text: string): string {
-  const value = text.trim()
-  if (!value) throw new Error('Search text cannot be empty')
-  patchConfig((raw) => ({
-    ...raw,
-    search: { ...((raw.search as Record<string, unknown>) ?? {}), text: value },
-  }))
-  return value
-}
-
-/**
  * The cover letter: which mode applications use, and the static text itself.
  *
  * Both live here because the two are one decision in the UI — a mode switch with the

@@ -3,7 +3,7 @@ import { basename, resolve } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { Repo, type ApplicationStatus } from '../db/repo.js'
 import { loadConfig, configSource } from '../config/load.js'
-import { setDryRun, setLetter, setSearchText } from '../config/save.js'
+import { setDryRun, setLetter } from '../config/save.js'
 import { limitWarnings } from '../config/schema.js'
 import { CONFIG_EXAMPLE_PATH, CONFIG_PATH, SCREENSHOT_DIR, projectPath } from '../core/paths.js'
 import { dashboardState } from './state.js'
@@ -184,7 +184,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ------------------------------------------------------------------- config
 
   /**
-   * Read-only except for dryRun and search.text (below). config.json stays the single
+   * Read-only except for dryRun and the letter (below). config.json stays the single
    * validated source of truth; the UI does not re-implement its checks, it reuses the schema.
    */
   app.get('/api/config', () => {
@@ -218,28 +218,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const value = setDryRun(req.body.dryRun)
     pingState('config:dryRun')
     return { ok: true, dryRun: value }
-  })
-
-  /**
-   * The search query. Same guard as dryRun: a running collect has already built its
-   * search URL, so changing the text under it would make the dashboard describe a run
-   * that is not happening.
-   */
-  app.post<{ Body: { text?: string } }>('/api/config/search-text', (req, reply) => {
-    const running = currentRun()
-    if (running) {
-      return reply.code(409).send({ error: `${running.mode} is running — stop it before changing the search`, running })
-    }
-    if (typeof req.body?.text !== 'string' || !req.body.text.trim()) {
-      return reply.code(400).send({ error: 'text must be a non-empty string' })
-    }
-    try {
-      const value = setSearchText(req.body.text)
-      pingState('config:searchText')
-      return { ok: true, text: value }
-    } catch (e) {
-      return reply.code(400).send({ error: (e as Error).message })
-    }
   })
 
   /**

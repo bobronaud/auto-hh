@@ -55,9 +55,6 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
         <h2>настройки прогона</h2>
         <table>
           <tbody>
-            <Row k='поиск'>
-              <SearchText text={state.search.text} busy={!!state.run} onSaved={onChange} />
-            </Row>
             <Row k='письмо'>
               <Letter letter={state.letter} busy={!!state.run} onSaved={onChange} />
             </Row>
@@ -71,77 +68,13 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
 }
 
 /**
- * The hh search query, the one search setting editable here.
- *
- * It is what decides how many vacancies exist to apply to at all, and the goal is
- * coverage — widening the query is the cheapest way to get more of it. The rest of
- * the search block stays a file edit.
- *
- * The field is only reset from the server while it is untouched: overwriting a draft
- * because a live-state poll arrived mid-typing is how an edit disappears.
- */
-function SearchText({ text, busy, onSaved }: { text: string; busy: boolean; onSaved: () => void }) {
-  const [value, setValue] = useState(text);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const dirty = value.trim() !== text.trim();
-
-  useEffect(() => {
-    setValue((v) => (v.trim() === text.trim() ? text : v));
-  }, [text]);
-
-  const save = async (): Promise<void> => {
-    if (!dirty || !value.trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.setSearchText(value);
-      onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className='search-text'>
-        <input
-          type='text'
-          value={value}
-          spellCheck={false}
-          placeholder='frontend OR фронтенд OR react OR vue'
-          disabled={busy || saving}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void save();
-            if (e.key === 'Escape') setValue(text);
-          }}
-        />
-        <button
-          className={dirty ? 'primary' : ''}
-          disabled={!dirty || !value.trim() || busy || saving}
-          title={busy ? 'идёт прогон — поиск не меняется на ходу' : 'записать в config.json'}
-          onClick={() => void save()}>
-          сохранить
-        </button>
-        {dirty && !busy && <span className='dim'>не сохранено</span>}
-      </div>
-      {error && <div className='dim danger-text'>{error}</div>}
-    </>
-  );
-}
-
-/**
  * Режим письма и, для статического, сам текст.
  *
  * Переключатель здесь, потому что это решение про один отклик, а не про конфиг:
  * статический текст уходит как есть и ни от чего не зависит, в режиме llm письма
  * пишет сам прогон откликов, а вакансия без письма пропускается и остаётся в очереди.
  *
- * Текст, как и строка поиска, не затирается живым обновлением состояния, пока
+ * Текст не затирается живым обновлением состояния, пока
  * в поле лежит несохранённый черновик.
  */
 function Letter({ letter, busy, onSaved }: { letter: DashboardState['letter']; busy: boolean; onSaved: () => void }) {
@@ -263,7 +196,18 @@ function duration(fromIso: string, toIso: string): string {
 }
 
 /** Optional third element tints the value — only for counts worth noticing. */
-type Stat = [label: string, value: React.ReactNode, tone?: 'ok' | 'warn' | 'danger'];
+// `always` keeps the tone on zero too and colours the label with it; otherwise a
+// zero is greyed out and only the number carries the tone.
+type Stat = [label: string, value: React.ReactNode, tone?: 'ok' | 'warn' | 'danger', always?: boolean];
+
+// Mirrors DROP_LABEL in src/scoring/filters.ts — the UI does not import server code.
+const DROP_LABEL: Record<string, string> = {
+  already_applied: 'уже откликались',
+  has_test: 'тестовое задание',
+  company_blacklist: 'компания в чёрном списке',
+  title_blacklist: 'стоп-слово в названии',
+  not_frontend: 'не фронтенд',
+};
 
 /** Counts collapse to «ключ: n» pairs; an empty map says nothing, so it is left out. */
 function breakdown(label: string, map: Record<string, number> | undefined): Stat[] {
@@ -281,13 +225,14 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
   switch (mode) {
     case 'collect': {
       const r = result as CollectResult;
-      if (typeof r.scraped !== 'number') return null;
+      if (typeof r.queued !== 'number') return null;
       return [
         ['собрано с выдачи', r.scraped],
-        ['сохранено', r.stored],
-        ['прошло фильтры', r.kept],
-        ['нужна страница вакансии', r.needDetail],
-        ...breakdown('отсеяно', r.dropped),
+        ['попало в очередь', r.queued, 'ok', true],
+        ['было разобрано', r.handled],
+        // One row per drop reason: "уже откликались: 196" reads on its own, a
+        // generic "отсеяно" heading over raw reason codes did not.
+        ...Object.entries(r.dropped ?? {}).map(([k, n]): Stat => [DROP_LABEL[k] ?? k, n]),
         ...breakdown('по резюме', r.byResume),
       ];
     }
@@ -335,10 +280,10 @@ function LastRun({ run }: { run: NonNullable<DashboardState['lastRun']> }) {
         {!run.ok && <div className='danger-text'>упал: {String(run.result)}</div>}
         {stats && (
           <dl className='run-stats'>
-            {stats.map(([label, value, tone]) => (
+            {stats.map(([label, value, tone, always]) => (
               <Fragment key={label}>
-                <dt>{label}</dt>
-                <dd className={value === 0 ? 'zero' : tone}>{value}</dd>
+                <dt className={always ? tone : undefined}>{label}</dt>
+                <dd className={value === 0 && !always ? 'zero' : tone}>{value}</dd>
               </Fragment>
             ))}
           </dl>

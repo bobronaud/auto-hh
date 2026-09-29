@@ -32,6 +32,24 @@ CREATE TABLE IF NOT EXISTS vacancies (
 );
 CREATE INDEX IF NOT EXISTS idx_vacancies_found_at ON vacancies (found_at);
 
+-- Отсеянные фильтром «не фронтенд» — только для анализа по базе: какие заголовки
+-- выпадают и не пора ли расширить scoring.keywords. Отдельная таблица, а не строка
+-- в vacancies: всё в vacancies — кандидат в очередь, и отсеянная вакансия оказалась
+-- бы там же, где живые. UI её не читает.
+CREATE TABLE IF NOT EXISTS dropped_vacancies (
+  hh_id         TEXT    PRIMARY KEY,
+  title         TEXT    NOT NULL,
+  company       TEXT,
+  url           TEXT    NOT NULL,
+  area          TEXT,
+  snippet       TEXT,
+  reason        TEXT    NOT NULL,
+  first_seen_at TEXT    NOT NULL,
+  last_seen_at  TEXT    NOT NULL,
+  -- Сколько сборов её видели: одна и та же вакансия висит в выдаче неделями.
+  seen_count    INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS scores (
   vacancy_id     INTEGER PRIMARY KEY REFERENCES vacancies (id) ON DELETE CASCADE,
   score_vacancy  REAL,

@@ -9,12 +9,25 @@
  * boundaries are spelled out as Unicode property escapes instead.
  */
 
+/**
+ * Fold the look-alike dashes and spaces hh titles arrive with into plain ASCII.
+ *
+ * Titles are typed by employers and pasted from anywhere: "front―end" with a
+ * horizontal bar, "Full‑Stack" with a non-breaking hyphen. Each looks identical to the
+ * keyword and silently fails to match it — both were found among "не фронтенд" drops.
+ */
+export function normalizeText(s: string): string {
+  return s
+    .replace(/[‐-―−﹘﹣－]/g, '-')
+    .replace(/[  -   　]/g, ' ')
+}
+
 const cache = new Map<string, RegExp>()
 
 function wordRegex(needle: string): RegExp {
   let re = cache.get(needle)
   if (re) return re
-  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escaped = normalizeText(needle).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   // Letters and digits on either side block a match; punctuation and spaces do not,
   // so "React," "Vue.js" and "(React)" all count while "products" does not.
   re = new RegExp(`(?<![\\p{L}\\d])${escaped}(?![\\p{L}\\d])`, 'giu')
@@ -27,7 +40,7 @@ export function countWordHits(haystack: string, needle: string): number {
   if (!haystack || !needle) return 0
   const re = wordRegex(needle)
   re.lastIndex = 0
-  return (haystack.match(re) ?? []).length
+  return (normalizeText(haystack).match(re) ?? []).length
 }
 
 /** Does any of `needles` appear as a standalone word? */

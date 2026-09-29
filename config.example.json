@@ -44,7 +44,7 @@
     "excludedText": [],
     "workFormat": [],
     "period": 30,
-    "maxPages": 20
+    "maxPages": 40
   },
   "filters": {
     "skipWithTest": false,
