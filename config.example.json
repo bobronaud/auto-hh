@@ -36,7 +36,7 @@
     "minScore": 1
   },
   "search": {
-    "text": "frontend OR фронтенд OR react OR vue OR angular OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js",
+    "text": "frontend OR фронтенд OR react OR vue OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js OR \"full-stack\" OR \"full stack\" OR \"web-программист\" OR \"web программист\" OR \"веб-программист\" OR \"веб программист\" OR \"vibe-coder\" OR \"vibe coder\" OR вайбкодер OR \"вайб-кодер\" OR \"web-разработчик\" OR \"web разработчик\" OR \"веб-разработчик\" OR \"веб разработчик\" OR \"web developer\"",
     "searchField": [
       "name"
     ],
@@ -49,7 +49,7 @@
   "filters": {
     "skipWithTest": false,
     "companyBlacklist": [],
-    "titleBlacklist": []
+    "titleBlacklist": ["qa", "аналитик", "lead", "analyst", "1c", "1с"]
   },
   "limits": {
     "perDay": 100,
@@ -98,18 +98,35 @@
       "nodejs",
       "nest",
       "nest.js",
-      "nestjs"
+      "nestjs",
+      "web-программист",
+      "web программист",
+      "веб-программист",
+      "веб программист",
+      "vibe-coder",
+      "vibe coder",
+      "вайбкодер",
+      "вайб-кодер",
+      "фронтенда",
+      "фронтендер",
+      "фронтэнд",
+      "web-разработчик",
+      "web разработчик",
+      "веб-разработчик",
+      "веб разработчик",
+      "web developer",
+      "web-developer"
     ]
   },
   "letter": {
-    "mode": "static",
+    "mode": "llm",
     "text": "Здравствуйте! Работал со всеми технологиями из вашей вакансии. Когда удобно созвониться?",
-    "maxChars": 1000,
+    "maxChars": 700,
     "minChars": 300,
     "requireManualApproval": false,
     "language": "ru",
     "batchSize": 10,
-    "extraSkills": ""
+    "extraSkills": "Бэкенд: Node.js, NestJS, PostgreSQL, Prisma ORM. Писал и поддерживал серверную часть в коммерческих проектах, поэтому фуллстек-вакансии закрываются целиком, а не наполовину."
   },
   "llm": {
     "provider": "claude-cli",
