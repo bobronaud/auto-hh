@@ -36,7 +36,7 @@
     "minScore": 1
   },
   "search": {
-    "text": "frontend OR фронтенд OR react OR vue OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js OR \"full-stack\" OR \"full stack\" OR \"web-программист\" OR \"web программист\" OR \"веб-программист\" OR \"веб программист\" OR \"vibe-coder\" OR \"vibe coder\" OR вайбкодер OR \"вайб-кодер\" OR \"web-разработчик\" OR \"web разработчик\" OR \"веб-разработчик\" OR \"веб разработчик\" OR \"web developer\"",
+    "text": "frontend OR фронтенд OR react OR vue OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js OR \"full-stack\" OR \"full stack\" OR \"web-программист\" OR \"web программист\" OR \"веб-программист\" OR \"веб программист\" OR \"vibe-coder\" OR \"vibe coder\" OR вайбкодер OR \"вайб-кодер\" OR \"web-разработчик\" OR \"web разработчик\" OR \"веб-разработчик\" OR \"веб разработчик\" OR \"web developer\" OR \"ui-разработчик\" OR \"ui разработчик\" OR \"ui-developer\" OR \"ui developer\" OR \"ui-программист\" OR \"ui программист\"",
     "searchField": [
       "name"
     ],
