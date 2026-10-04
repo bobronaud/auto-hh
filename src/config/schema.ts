@@ -64,6 +64,14 @@ const limitsSchema = z.object({
   /** Extra "reading the page" pause before deciding to apply. */
   readPauseMsMin: z.number().int().min(0).default(1500),
   readPauseMsMax: z.number().int().min(0).default(4000),
+  /**
+   * Gap between vacancies in an apply run, between the pages read for letter
+   * descriptions and between search result pages. 0 = none: the owner traded the
+   * human-like pacing for speed (05.10). Everywhere else there are no timers, only
+   * waits for DOM state. delayMs/readPause above are left to selectors:probe.
+   * Raise this if captchas become frequent.
+   */
+  gapMs: z.number().int().min(0).default(0),
 })
 
 const scoringSchema = z.object({

@@ -4,7 +4,7 @@ import { routeResume } from '../scoring/resumeRouter.js'
 import { RateLimiter, describeLimit } from '../queue/rateLimiter.js'
 import { Repo, type VacancyRow } from '../db/repo.js'
 import { logger } from '../core/logger.js'
-import { pause } from '../hh/browser.js'
+import { gap } from '../hh/browser.js'
 import type { Config } from '../config/schema.js'
 
 const log = logger('run')
@@ -164,7 +164,7 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
         break
       }
 
-      await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+      await gap(cfg)
     }
   } finally {
     repo.finishRun(

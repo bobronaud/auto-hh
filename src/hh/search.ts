@@ -1,7 +1,7 @@
 import type { Page } from 'playwright'
 import { selectors } from './selectors.js'
 import { buildSearchUrl } from './searchUrl.js'
-import { goto, pause, randomBetween } from './browser.js'
+import { goto, gap } from './browser.js'
 import { logger } from '../core/logger.js'
 import type { Config } from '../config/schema.js'
 import type { VacancyInput } from '../db/repo.js'
@@ -149,7 +149,14 @@ export async function collectVacancies(page: Page, cfg: Config): Promise<Scraped
     const url = buildSearchUrl(cfg.search, p)
     log.info(`page ${p + 1}/${cfg.search.maxPages}`)
     await goto(page, url, cfg)
-    await randomBetween(cfg.limits.readPauseMsMin, cfg.limits.readPauseMsMax)
+    // Wait for the cards themselves, not a timer. A timeout is not an error: an empty
+    // page then yields no cards and the walk stops below, as before.
+    const [first, ...rest] = selectors.search.card.map((s) => page.locator(s))
+    await rest
+      .reduce((acc, l) => acc.or(l), first!)
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => {})
 
     const cards = await scrapePage(page)
     if (cards.length === 0) {
@@ -168,7 +175,7 @@ export async function collectVacancies(page: Page, cfg: Config): Promise<Scraped
       log.info('last page reached')
       break
     }
-    await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+    await gap(cfg)
   }
 
   return [...all.values()]

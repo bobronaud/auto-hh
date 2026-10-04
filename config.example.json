@@ -57,7 +57,8 @@
     "delayMs": 5000,
     "delayJitterMs": 400,
     "readPauseMsMin": 1500,
-    "readPauseMsMax": 4000
+    "readPauseMsMax": 4000,
+    "gapMs": 0
   },
   "scoring": {
     "weights": {

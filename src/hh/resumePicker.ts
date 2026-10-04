@@ -84,7 +84,12 @@ export async function selectResume(page: Page, resume: ResumeConfig): Promise<vo
   }
 
   await page.locator(triggerSel).first().click()
-  await page.waitForTimeout(800)
+  // Wait for the list itself, not a timer: it renders in a portal outside the modal.
+  await page
+    .locator(selectors.apply.resumeOption[0]!)
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {})
 
   const titles = await availableTitles(page)
   if (titles.length === 0) {
@@ -99,7 +104,17 @@ export async function selectResume(page: Page, resume: ResumeConfig): Promise<vo
     .filter({ hasText: target })
     .first()
     .click()
-  await page.waitForTimeout(800)
+  // Until the trigger shows the chosen title — scoped to the trigger, because the
+  // open options carry resume-title nodes too. Not fatal on timeout: the check below
+  // reads the picker and says what it holds.
+  await page
+    .locator(triggerSel)
+    .first()
+    .locator(selectors.apply.resumeTitle[0]!)
+    .filter({ hasText: target })
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {})
 
   // Verify rather than trust: a click that silently missed would send the wrong
   // resume, and that failure is invisible until an employer reads it.

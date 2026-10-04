@@ -338,6 +338,12 @@ export function pause(baseMs: number, jitterMs: number): Promise<void> {
   return new Promise((r) => setTimeout(r, Math.max(50, baseMs + delta)))
 }
 
+/** The gap between vacancies and between search pages (limits.gapMs). 0 means none — not a 50ms floor. */
+export function gap(cfg: Config): Promise<void> {
+  const { gapMs, delayJitterMs } = cfg.limits
+  return gapMs > 0 ? pause(gapMs, delayJitterMs) : Promise.resolve()
+}
+
 export function randomBetween(minMs: number, maxMs: number): Promise<void> {
   const lo = Math.min(minMs, maxMs)
   const hi = Math.max(minMs, maxMs)

@@ -1,5 +1,5 @@
 import { Repo, type VacancyRow } from '../db/repo.js'
-import { openContext, getPage, HumanNeededError, pause, randomBetween } from '../hh/browser.js'
+import { openContext, getPage, HumanNeededError, gap } from '../hh/browser.js'
 import { fetchVacancyDetails } from '../hh/vacancyPage.js'
 import { routeResume } from '../scoring/resumeRouter.js'
 import { generateLetters } from '../letters/generate.js'
@@ -160,8 +160,7 @@ async function ensureDescriptions(
         }
         log.warn(`could not read ${v.url}: ${(e as Error).message}`)
       }
-      await randomBetween(cfg.limits.readPauseMsMin, cfg.limits.readPauseMsMax)
-      await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+      await gap(cfg)
     }
   } finally {
     await ctx.close()

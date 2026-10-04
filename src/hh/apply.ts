@@ -3,7 +3,7 @@ import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
 import { classifyApplyFlow, confirmOtherCountry, type NeedsHumanReason } from './applyFlow.js'
 import { selectResume } from './resumePicker.js'
 import { readForm, fillForm, FormFillError } from './responseForm.js'
-import { goto, screenshot, pause, randomBetween, waitOutCaptcha, dumpHtml } from './browser.js'
+import { goto, screenshot, waitOutCaptcha, dumpHtml } from './browser.js'
 import { parseSalary } from './search.js'
 import { answerForm, describeAnswer } from '../answers/generate.js'
 import { salaryAnswer } from '../answers/salary.js'
@@ -54,7 +54,6 @@ export async function applyToVacancy(
   input: ApplyInput,
 ): Promise<ApplyOutcome> {
   await goto(page, input.url, cfg)
-  await randomBetween(cfg.limits.readPauseMsMin, cfg.limits.readPauseMsMax)
 
   if (await firstVisibleMatch(page, selectors.vacancy.archived)) {
     return { status: 'skipped', reason: 'archived' }
@@ -69,7 +68,7 @@ export async function applyToVacancy(
   const facts = await readPageFacts(page)
 
   await page.locator(applySel).first().click()
-  await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+  await waitForApplyFlow(page)
 
   // hh can answer the apply click with a captcha instead of a form. Checked here and
   // again after submit: both are mid-flow, without a navigation, so goto()'s state
@@ -80,7 +79,7 @@ export async function applyToVacancy(
     if (!opened && !/\/applicant\/vacancy_response/.test(page.url())) {
       try {
         await page.locator(applySel).first().click()
-        await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+        await waitForApplyFlow(page)
       } catch (e) {
         log.warn(`   не удалось повторить клик после капчи: ${(e as Error).message}`)
       }
@@ -90,7 +89,7 @@ export async function applyToVacancy(
   // Предупреждение о вакансии в другой стране стоит ПЕРЕД формой отклика и формой
   // не является. Подтверждаем и ждём то, что откроется следом.
   if (await confirmOtherCountry(page)) {
-    await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+    await waitForApplyFlow(page, { afterConfirm: true })
   }
 
   const flow = await classifyApplyFlow(page)
@@ -130,7 +129,6 @@ export async function applyToVacancy(
       screenshot: shot,
     }
   }
-  await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
 
   if (input.letter) {
     const wrote = await writeLetter(page, cfg, input.letter)
@@ -147,26 +145,27 @@ export async function applyToVacancy(
  * Everything after the form is filled, shared by both flows: the dry-run stop, submit,
  * the captcha that may answer it, and the confirmation by DOM.
  *
- * `quick` is the questions flow (owner, 05.10: no human-like pauses there): instead of
- * a timer after submit it waits for the success notice itself, up to a ceiling.
+ * No timer after submit (owner, 05.10): it waits for the outcome itself — success,
+ * captcha or an hh error — up to a ceiling. `fullPage` is for the questions flow,
+ * whose answers run below the fold.
  */
 async function finish(
   page: Page,
   cfg: Config,
   input: ApplyInput,
-  extra: { answers?: StoredAnswer[]; quick?: boolean } = {},
+  extra: { answers?: StoredAnswer[]; fullPage?: boolean } = {},
 ): Promise<ApplyOutcome> {
-  const { answers, quick = false } = extra
+  const { answers, fullPage = false } = extra
 
   if (cfg.dryRun) {
-    const shot = await screenshot(page, `dry-run-${input.resume.id}`, quick)
+    const shot = await screenshot(page, `dry-run-${input.resume.id}`, fullPage)
     log.info(`DRY RUN — everything ready, submit NOT clicked (${input.resume.id})`)
     return { status: 'dry_run', resumeId: input.resume.id, screenshot: shot, answers }
   }
 
   const submitSel = await firstMatch(page, selectors.apply.submitButton)
   if (!submitSel) {
-    const shot = await screenshot(page, 'no-submit-button', quick)
+    const shot = await screenshot(page, 'no-submit-button', fullPage)
     return {
       status: 'failed',
       errorCode: 'no_submit_button',
@@ -177,8 +176,7 @@ async function finish(
   }
 
   await page.locator(submitSel).first().click()
-  if (quick) await waitForSuccess(page)
-  else await pause(cfg.limits.delayMs + 1500, cfg.limits.delayJitterMs)
+  await waitForSubmitOutcome(page)
 
   // Before asking whether it worked, ask whether hh is still talking to us. A captcha
   // here means the application did NOT go out, and the next vacancy would hit the same
@@ -193,8 +191,7 @@ async function finish(
       if (again) {
         log.info('   дожимаем отправку после капчи')
         await page.locator(again).first().click()
-        if (quick) await waitForSuccess(page)
-        else await pause(cfg.limits.delayMs + 1500, cfg.limits.delayJitterMs)
+        await waitForSubmitOutcome(page)
         await waitOutCaptcha(page, cfg, 'submit-retry')
       }
     }
@@ -204,7 +201,7 @@ async function finish(
   // recorded as sent — a false 'applied' would both skip a real vacancy forever and
   // consume a slot in the rolling window that hh never actually counted.
   const ok = await firstVisibleMatch(page, selectors.apply.success)
-  const shot = await screenshot(page, `applied-${input.resume.id}`, quick)
+  const shot = await screenshot(page, `applied-${input.resume.id}`, fullPage)
 
   if (!ok) {
     if (await firstVisibleMatch(page, selectors.apply.limitExceeded)) {
@@ -235,11 +232,59 @@ async function finish(
   return { status: 'applied', resumeId: input.resume.id, screenshot: shot, answers }
 }
 
-/** Wait for any success candidate to become visible — a DOM state, not a timer. */
-async function waitForSuccess(page: Page, timeoutMs = 15_000): Promise<void> {
-  const [first, ...rest] = selectors.apply.success.map((s) => page.locator(s))
+/**
+ * Wait until any candidate is visible — a DOM state, not a timer. A timeout is not an
+ * error: the caller inspects the page next and judges whatever is there.
+ */
+async function waitForAny(page: Page, candidates: readonly string[], timeoutMs: number): Promise<void> {
+  const [first, ...rest] = candidates.map((s) => page.locator(s))
   const any = rest.reduce((acc, l) => acc.or(l), first!)
   await any.first().waitFor({ state: 'visible', timeout: timeoutMs }).catch(() => {})
+}
+
+/** Captcha in any of its shapes: by attribute, or by its text inside an overlay. */
+const captchaCandidates = [
+  ...selectors.antibot.captcha,
+  ...selectors.antibot.captchaScope.flatMap((scope) =>
+    selectors.antibot.captchaText.map((text) => `${scope} >> ${text}`),
+  ),
+]
+
+/**
+ * After "Откликнуться": wait for whatever hh answers with, so classifyApplyFlow sees a
+ * rendered form rather than an empty shell. Only structural candidates — text ones
+ * such as "пройти тест" would match the vacancy description that is still on screen
+ * and end the wait at once. The other-country warning is left out after it has been
+ * confirmed: its button may linger for a moment and end the wait just as early.
+ */
+async function waitForApplyFlow(page: Page, opts: { afterConfirm?: boolean } = {}): Promise<void> {
+  await waitForAny(
+    page,
+    [
+      ...selectors.apply.resumeSelect,
+      ...selectors.apply.letterToggle,
+      ...selectors.apply.letterTextarea,
+      ...selectors.responseForm.question,
+      '[data-qa="vacancy-test"]',
+      ...(opts.afterConfirm ? [] : selectors.apply.confirmOtherCountry),
+      ...captchaCandidates,
+    ],
+    10_000,
+  )
+}
+
+/** After "Отправить": success, a captcha, or an hh error — whichever shows first. */
+async function waitForSubmitOutcome(page: Page): Promise<void> {
+  await waitForAny(
+    page,
+    [
+      ...selectors.apply.success,
+      ...selectors.apply.limitExceeded,
+      ...selectors.apply.tooLongMessage,
+      ...captchaCandidates,
+    ],
+    15_000,
+  )
 }
 
 async function readPageFacts(page: Page): Promise<PageFacts> {
@@ -329,14 +374,14 @@ async function applyWithQuestions(
   }
 
   if (input.letter) {
-    const wrote = await writeLetter(page, cfg, input.letter, true)
+    const wrote = await writeLetter(page, cfg, input.letter)
     if (!wrote.ok) {
       const shot = await screenshot(page, 'letter-failed', true)
       return { status: 'failed', errorCode: wrote.errorCode, message: wrote.message, screenshot: shot, answers }
     }
   }
 
-  return finish(page, cfg, input, { answers, quick: true })
+  return finish(page, cfg, input, { answers, fullPage: true })
 }
 
 /** Reveal the cover-letter field and type into it. */
@@ -344,7 +389,6 @@ async function writeLetter(
   page: Page,
   cfg: Config,
   letter: string,
-  quick = false,
 ): Promise<{ ok: true } | { ok: false; errorCode: string; message: string }> {
   if (letter.length > cfg.letter.maxChars) {
     return {
@@ -362,16 +406,8 @@ async function writeLetter(
       return { ok: false, errorCode: 'no_letter_toggle', message: 'cover-letter toggle not found' }
     }
     await page.locator(toggleSel).first().click()
-    if (quick) {
-      // Questions flow: wait for the field itself rather than a human-sized pause.
-      await page
-        .locator(selectors.apply.letterTextarea[0]!)
-        .first()
-        .waitFor({ state: 'visible', timeout: 5000 })
-        .catch(() => {})
-    } else {
-      await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
-    }
+    // Wait for the field itself rather than a human-sized pause.
+    await waitForAny(page, selectors.apply.letterTextarea, 5000)
   }
 
   const areaSel = await firstMatch(page, selectors.apply.letterTextarea)
