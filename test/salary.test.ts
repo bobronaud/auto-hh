@@ -20,6 +20,12 @@ test('senior in the title beats the experience line', () => {
   assert.equal(salaryAnswer({ ...base, title: 'Сеньор фронтенд' }), '200 000 руб')
 })
 
+test('middle and senior together → 150-200k', () => {
+  assert.equal(salaryAnswer({ ...base, title: 'Middle/Senior Frontend Developer' }), '150 000 - 200 000 руб')
+  assert.equal(salaryAnswer({ ...base, title: 'Middle+/Senior React-разработчик', experience: 'более 6 лет' }), '150 000 - 200 000 руб')
+  assert.equal(salaryAnswer({ ...base, title: 'Frontend-разработчик (Middle / Senior)' }), '150 000 - 200 000 руб')
+})
+
 test('junior without middle, or no experience → 100-150k', () => {
   assert.equal(salaryAnswer({ ...base, title: 'Junior Frontend' }), '100 000 - 150 000 руб')
   assert.equal(salaryAnswer({ ...base, title: 'Джуниор фронтенд-разработчик' }), '100 000 - 150 000 руб')

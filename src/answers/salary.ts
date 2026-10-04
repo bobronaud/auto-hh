@@ -3,7 +3,8 @@
  * order:
  *
  *   1. the posting names a range → its upper bound (only "от X" → X);
- *   2. "senior" in the title → 200 000;
+ *   2. "middle" and "senior" both in the title ("Middle/Senior", "Middle+/Senior")
+ *      → 150-200k; "senior" alone → 200 000;
  *   3. "junior" in the title without "middle", or no experience required → 100-150k;
  *   4. 1-3 years → 150 000;
  *   5. 3-6 years → 150-200k;
@@ -54,7 +55,7 @@ export function salaryAnswer(v: SalaryInput): string {
   if (top) return `${formatAmount(top)} ${currencyLabel(v.currency)}`
 
   const band = experienceBand(v.experience)
-  if (SENIOR.test(v.title)) return '200 000 руб'
+  if (SENIOR.test(v.title)) return MIDDLE.test(v.title) ? '150 000 - 200 000 руб' : '200 000 руб'
   if ((JUNIOR.test(v.title) && !MIDDLE.test(v.title)) || band === 'none') return '100 000 - 150 000 руб'
   if (band === '1-3') return '150 000 руб'
   if (band === '3-6') return '150 000 - 200 000 руб'
