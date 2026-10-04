@@ -147,9 +147,8 @@ const llmSchema = z.object({
   /**
    * 'claude-cli' shells out to the locally installed, already-authenticated `claude`
    * binary. No API key, no separate billing — it draws on the Claude Code
-   * subscription. The tradeoff is overhead: every call re-sends Claude Code's own
-   * system prompt (~28k tokens) and takes ~4s, against a payload of a few hundred
-   * tokens. Fine for ~30 letters a day, wasteful at 500.
+   * subscription. Claude Code's own prompt, tools and MCP servers are switched off
+   * per call (see claudeCli.ts), so the overhead is process start-up, not tokens.
    *
    * 'anthropic' calls the API directly and needs a key from console.anthropic.com —
    * cheaper and faster per letter, but separately billed.

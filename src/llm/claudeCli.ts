@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import type { CompletionRequest, CompletionResult, LlmProvider } from './provider.js'
 import { logger } from '../core/logger.js'
@@ -15,11 +16,12 @@ const log = logger('llm')
  * `claude -p` runs it non-interactively — so a local personal tool can use it without
  * anyone provisioning anything.
  *
- * Known cost, measured rather than assumed: each invocation re-sends Claude Code's own
- * system prompt (~9k cache-write + ~19k cache-read tokens) and takes roughly four
- * seconds, whatever the payload. That overhead is charged against the subscription's
- * usage allowance, not billed separately. At a few dozen letters a day it is
- * comfortable; at several hundred it is worth moving to the API.
+ * By default `claude -p` ships the whole Claude Code environment with every request:
+ * its own system prompt, every built-in tool's description, MCP servers (claude.ai
+ * connectors included), skills and the CLAUDE.md found from cwd upwards. Measured on
+ * a one-word prompt: ~36k input tokens with the old flags, ~400 with the ones below.
+ * `--bare` would do the same in one flag, but it ignores the subscription's OAuth and
+ * only reads ANTHROPIC_API_KEY, so the pieces are switched off one by one instead.
  */
 export class ClaudeCliProvider implements LlmProvider {
   readonly name = 'claude-cli'
@@ -30,13 +32,19 @@ export class ClaudeCliProvider implements LlmProvider {
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
-    const args = ['-p', req.prompt, '--output-format', 'json', '--model', this.model]
-
-    // Letter writing needs no tools. Denying them keeps the CLI from wandering off
-    // into the filesystem and trims what it has to reason about.
-    args.push('--disallowed-tools', 'Bash,Read,Write,Edit,WebSearch,WebFetch')
-
-    if (req.system) args.push('--append-system-prompt', req.system)
+    const args = [
+      '-p', req.prompt,
+      '--output-format', 'json',
+      '--model', this.model,
+      // No built-in tools at all: their descriptions were most of the request.
+      '--tools', '',
+      // No MCP servers, claude.ai connectors included.
+      '--strict-mcp-config',
+      // No user/project/local settings: hooks and plugins have nothing to do here.
+      '--setting-sources', '',
+      // Replace Claude Code's own system prompt rather than appending to it.
+      '--system-prompt', req.system ?? 'Отвечай строго в заданном формате.',
+    ]
 
     const started = Date.now()
     let stdout: string
@@ -44,8 +52,10 @@ export class ClaudeCliProvider implements LlmProvider {
       const result = await run('claude', args, {
         timeout: this.cfg.llm.timeoutSec * 1000,
         maxBuffer: 8 * 1024 * 1024,
+        // Outside the project, so its CLAUDE.md and git status stay out of the prompt.
+        cwd: tmpdir(),
         // Inherit the user's environment so the CLI finds its own credentials.
-        env: process.env,
+        env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: 'false' },
       })
       stdout = result.stdout
     } catch (e) {
