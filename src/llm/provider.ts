@@ -14,6 +14,13 @@ export interface CompletionRequest {
   temperature?: number
   /** Ask the provider for strict JSON where it supports it. */
   json?: boolean
+  /** Pictures sent ahead of the prompt text (captcha reading). */
+  images?: CompletionImage[]
+}
+
+export interface CompletionImage {
+  mediaType: 'image/png' | 'image/jpeg'
+  base64: string
 }
 
 export interface CompletionResult {

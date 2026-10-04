@@ -56,9 +56,9 @@ export const selectors = {
       // Капча встаёт не только на входе: 22.09 hh показал её ПОСЛЕ кнопки «Отправить»
       // в модалке отклика, на 15-м отклике подряд. Прежний список ловил только
       // страницу входа и заглушку DDoS-Guard, отклик уходил в no_success_confirmation,
-      // и прогон шёл дальше — 63 вакансии подряд в мусор. Атрибутные кандидаты ниже
-      // сняты со скриншота (data/screenshots/1790104669242-applied-react.png);
-      // живого DOM не было, поэтому берём широко и по подстроке.
+      // и прогон шёл дальше — 63 вакансии подряд в мусор. Первый кандидат подтверждён
+      // живым дампом (data/probe/captcha-submit-*.html); остальные — широкая страховка
+      // по подстроке на случай другой вёрстки.
       '[data-qa*="captcha"]',
       'input[name*="captcha" i]',
       'img[src*="captcha"]',
@@ -77,6 +77,27 @@ export const selectors = {
       'text=/введите текст с картинки/i',
       'text=/вы не робот/i',
     ],
+    /**
+     * Части диалога «Пройдите капчу» для автоввода (05.10). Сняты с живого дампа
+     * data/probe/captcha-submit-*.html: диалог встаёт поверх модалки отклика.
+     */
+    captchaPicture: ['img[data-qa="account-captcha-picture"]', 'img[src*="/captcha/picture"]'],
+    captchaInput: ['input[data-qa="account-captcha-input"]', 'input[name="captchaText"]'],
+    /**
+     * «Отправить» капчи — submit в той же форме, что и поле. Модалка отклика под ней
+     * тоже имеет submit, поэтому ищем только рядом с полем капчи.
+     */
+    captchaSubmit: [
+      'form:has(input[data-qa="account-captcha-input"]) button[type="submit"]',
+      'form:has(input[name="captchaText"]) button[type="submit"]',
+    ],
+    /** «Другой текст» — новая картинка, когда эту прочитать не удалось. */
+    captchaRenew: ['[data-qa="captcha-renew-text"]'],
+    /**
+     * «Неверный текст. Пожалуйста, повторите попытку.» Лежит в DOM всегда, под обёрткой
+     * aria-hidden="true" — показанной считается только без неё (captcha.ts, errorShown).
+     */
+    captchaError: ['[data-qa="account-captcha-error"]'],
     /** Контейнеры, в которых hh показывает капчу поверх страницы. */
     captchaScope: [
       'div[role="dialog"]',

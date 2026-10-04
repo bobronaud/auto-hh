@@ -141,6 +141,8 @@
     "locale": "ru-RU",
     "timezone": "Europe/Moscow",
     "manualActionTimeoutMs": 1200000,
+    "captchaAuto": true,
+    "captchaAutoAttempts": 3,
     "slowMoMs": 0
   }
 }

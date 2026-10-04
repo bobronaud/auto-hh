@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { BROWSER_PROFILE_DIR, PROBE_DIR, SCREENSHOT_DIR, ensureDirs } from '../core/paths.js'
 import { logger } from '../core/logger.js'
 import { selectors, firstMatch, firstVisibleMatch } from './selectors.js'
+import { solveCaptcha } from './captcha.js'
 import type { Config } from '../config/schema.js'
 import { resolve } from 'node:path'
 
@@ -14,9 +15,9 @@ export const HH_BASE = 'https://hh.ru'
  * Minimal anti-detection (RESEARCH §2.2).
  *
  * Deliberately small. This is not a bypass and does not pretend to be one: it only
- * removes the two loudest automation tells. Anything heavier (full stealth suites,
- * captcha solvers) is explicitly rejected by the research — solving captchas
- * automatically is the fastest way to turn a temporary block into a permanent one.
+ * removes the two loudest automation tells. Full stealth suites and third-party captcha
+ * services are rejected by the research; the one captcha path is solveCaptcha, which
+ * the owner chose with the risk known (05.10).
  */
 const STEALTH_INIT = `
   Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -184,10 +185,11 @@ async function anyVisible(page: Page, candidates: readonly string[]): Promise<st
  * is both pointless and the exact traffic that turns a temporary challenge into a
  * block: on 22.09 it cost 63 vacancies in a row.
  *
- * We do NOT read the picture (invariant 2). The browser is headful and already open
- * on the captcha — the owner types the letters, we watch the DOM until it is gone and
- * resume the same application. What separates a temporary challenge from a permanent
- * ban is who pressed the keys, so that is the one part not automated.
+ * First the picture is read through the LLM and typed in (solveCaptcha, owner's call
+ * 05.10 — invariant 2 used to forbid it). The read text goes to the log. If that fails
+ * — attempts ran out, or `claude -p` cannot be called at all — the captcha stays open
+ * and the human gets manualActionTimeoutMs to type it, exactly as before: the browser
+ * is headful, we watch the DOM until it is gone and resume the same application.
  *
  * Headless has nobody to ask, and a run that timed out waiting is over: both throw
  * HumanNeededError, which unwinds to the apply loop. It breaks WITHOUT writing an
@@ -203,6 +205,11 @@ export async function waitOutCaptcha(page: Page, cfg: Config, label: string): Pr
   const shot = await screenshot(page, `captcha-${label}`)
   const dump = await dumpHtml(page, `captcha-${label}`)
   log.error(`captcha matched: ${sel}`, { url: page.url(), shot, dump })
+
+  if (cfg.browser.captchaAuto && (await solveCaptcha(page, cfg))) {
+    log.info('капча пройдена — продолжаем')
+    return true
+  }
 
   if (cfg.browser.headless) {
     log.error('headless — nobody can type the captcha. Stopping.')

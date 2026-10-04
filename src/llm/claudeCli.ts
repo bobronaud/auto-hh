@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import type { CompletionRequest, CompletionResult, LlmProvider } from './provider.js'
@@ -32,18 +32,12 @@ export class ClaudeCliProvider implements LlmProvider {
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
+    if (req.images?.length) return this.completeWithImages(req)
+
     const args = [
       '-p', req.prompt,
       '--output-format', 'json',
-      '--model', this.model,
-      // No built-in tools at all: their descriptions were most of the request.
-      '--tools', '',
-      // No MCP servers, claude.ai connectors included.
-      '--strict-mcp-config',
-      // No user/project/local settings: hooks and plugins have nothing to do here.
-      '--setting-sources', '',
-      // Replace Claude Code's own system prompt rather than appending to it.
-      '--system-prompt', req.system ?? 'Отвечай строго в заданном формате.',
+      ...this.leanArgs(req),
     ]
 
     const started = Date.now()
@@ -67,6 +61,101 @@ export class ClaudeCliProvider implements LlmProvider {
     }
 
     return this.parse(stdout, Date.now() - started)
+  }
+
+  /**
+   * Images cannot ride in argv: `-p <text>` takes text only. With stream-json input the
+   * CLI reads one user message from stdin, and that message may carry image blocks —
+   * checked on the subscription's OAuth (05.10). Output is then a stream of events,
+   * one JSON per line; the final `result` event has the same shape as `--output-format json`.
+   */
+  private completeWithImages(req: CompletionRequest): Promise<CompletionResult> {
+    const args = [
+      '-p',
+      '--input-format', 'stream-json',
+      '--output-format', 'stream-json',
+      // stream-json output requires --verbose in print mode.
+      '--verbose',
+      ...this.leanArgs(req),
+    ]
+    const message = {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          ...(req.images ?? []).map((img) => ({
+            type: 'image',
+            source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
+          })),
+          { type: 'text', text: req.prompt },
+        ],
+      },
+    }
+
+    const started = Date.now()
+    return new Promise((resolvePromise, reject) => {
+      const child = spawn('claude', args, {
+        cwd: tmpdir(),
+        env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: 'false' },
+      })
+      let stdout = ''
+      let stderr = ''
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL')
+        reject(new Error(`claude CLI timed out after ${this.cfg.llm.timeoutSec}s`))
+      }, this.cfg.llm.timeoutSec * 1000)
+
+      child.stdout.on('data', (d) => (stdout += d))
+      child.stderr.on('data', (d) => (stderr += d))
+      child.on('error', (e: NodeJS.ErrnoException) => {
+        clearTimeout(timer)
+        reject(
+          e.code === 'ENOENT'
+            ? new Error('`claude` is not on PATH — install Claude Code or switch llm.provider.')
+            : new Error(`claude CLI failed: ${e.message}`),
+        )
+      })
+      child.on('close', (code) => {
+        clearTimeout(timer)
+        const resultLine = stdout
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith('{'))
+          .find((l) => {
+            try {
+              return (JSON.parse(l) as { type?: string }).type === 'result'
+            } catch {
+              return false
+            }
+          })
+        if (!resultLine) {
+          reject(new Error(`claude CLI failed (exit ${code}): ${stderr.trim() || stdout.trim().slice(0, 200)}`))
+          return
+        }
+        try {
+          resolvePromise(this.parse(resultLine, Date.now() - started))
+        } catch (e) {
+          reject(e)
+        }
+      })
+      // A CLI that died before reading stdin must surface as its exit, not as EPIPE.
+      child.stdin.on('error', () => {})
+      child.stdin.end(JSON.stringify(message) + '\n')
+    })
+  }
+
+  private leanArgs(req: CompletionRequest): string[] {
+    return [
+      '--model', this.model,
+      // No built-in tools at all: their descriptions were most of the request.
+      '--tools', '',
+      // No MCP servers, claude.ai connectors included.
+      '--strict-mcp-config',
+      // No user/project/local settings: hooks and plugins have nothing to do here.
+      '--setting-sources', '',
+      // Replace Claude Code's own system prompt rather than appending to it.
+      '--system-prompt', req.system ?? 'Отвечай строго в заданном формате.',
+    ]
   }
 
   /**

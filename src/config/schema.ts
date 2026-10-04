@@ -178,6 +178,14 @@ const browserSchema = z.object({
    * to the keyboard throws away the queue it was halfway through.
    */
   manualActionTimeoutMs: z.number().int().min(30_000).default(1_200_000),
+  /**
+   * Read the captcha picture through the LLM and type the answer (owner, 05.10).
+   * When it fails — or the LLM cannot be called at all — the run falls back to
+   * waiting manualActionTimeoutMs for a human, with the captcha left open.
+   */
+  captchaAuto: z.boolean().default(true),
+  /** Typed answers per captcha before handing it to the human. */
+  captchaAutoAttempts: z.number().int().min(1).max(10).default(3),
   slowMoMs: z.number().int().min(0).default(0),
 })
 

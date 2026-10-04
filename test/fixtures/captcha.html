@@ -1,0 +1,29 @@
+<!-- Captcha dialog from a live dump (data/probe/captcha-submit-*.html, 05.10), trimmed of
+     classes. The picture is an inline SVG instead of /captcha/picture; the script stands in
+     for hh: "AB12" closes the dialog, anything else shows the error and a new picture. -->
+<div role="dialog">
+  <h2 data-qa="title">Пройдите капчу</h2>
+  <div data-qa="title-description">Чтобы подтвердить, что вы&nbsp;не&nbsp;робот, введите текст с&nbsp;картинки:</div>
+  <form>
+    <img data-qa="account-captcha-picture" alt="captcha" width="160" height="50"
+      src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='50'%3E%3Ctext x='10' y='35' font-size='30'%3EAB12%3C/text%3E%3C/svg%3E">
+    <button aria-label="Другой текст" type="button" data-qa="captcha-renew-text">↻</button>
+    <button type="button" data-qa="captcha-language">English</button>
+    <input name="captchaText" type="text" data-qa="account-captcha-input" value="">
+    <div data-qa="form-helper-container"><div role="alert" data-qa="form-helper-error">
+      <div aria-hidden="true" id="err-wrap"><div data-qa="account-captcha-error">Неверный текст. Пожалуйста, повторите попытку.</div></div>
+    </div></div>
+    <input type="hidden" name="isBot" value="false">
+    <button type="submit">Отправить</button>
+  </form>
+</div>
+<script>
+  window.submits = 0
+  document.querySelector('form').addEventListener('submit', (e) => {
+    e.preventDefault()
+    window.submits++
+    const v = document.querySelector('input[name="captchaText"]').value
+    if (v === 'AB12') document.querySelector('[role="dialog"]').remove()
+    else document.getElementById('err-wrap').setAttribute('aria-hidden', 'false')
+  })
+</script>
