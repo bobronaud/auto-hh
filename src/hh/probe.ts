@@ -1,9 +1,19 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Page } from 'playwright'
-import { openContext, getPage, detectState, screenshot, HH_BASE } from './browser.js'
+import {
+  openContext,
+  getPage,
+  detectState,
+  screenshot,
+  dumpHtml,
+  goto,
+  pause,
+  waitOutCaptcha,
+  HH_BASE,
+} from './browser.js'
 import { selectors } from './selectors.js'
-import { classifyApplyFlow } from './applyFlow.js'
+import { classifyApplyFlow, confirmOtherCountry } from './applyFlow.js'
 import { buildSearchUrl } from './searchUrl.js'
 import { PROBE_DIR } from '../core/paths.js'
 import { logger } from '../core/logger.js'
@@ -304,4 +314,65 @@ function printReport(results: GroupResult[], notes: string[], path: string): voi
   }
   console.log(`\n  Report: ${path}`)
   console.log(`  ${ok.length} found, ${missing.length} missing\n`)
+}
+
+/**
+ * Capture the employer-questions form of the given vacancies. Opens each one, presses
+ * "Откликнуться" and saves the whole response page — HTML plus a full-page screenshot.
+ * NOTHING is submitted: the form is read and left as is.
+ *
+ * The answering code keys on this markup, and a selector written from a screenshot
+ * is a guess.
+ */
+export async function probeForms(cfg: Config, urls: readonly string[]): Promise<void> {
+  const ctx = await openContext({ ...cfg, browser: { ...cfg.browser, headless: false } })
+  const page = await getPage(ctx)
+  try {
+    for (const url of urls) {
+      log.info(`form probe: ${url}`)
+      await goto(page, url, cfg)
+      await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+
+      const experience = await page
+        .locator('[data-qa="vacancy-experience"]')
+        .first()
+        .innerText()
+        .catch(() => null)
+      log.info(`   experience: ${experience ?? '—'}`)
+
+      const applyBtn = await firstLocator(page, selectors.vacancy.applyButton)
+      if (!applyBtn) {
+        log.warn('   no apply button — already applied or archived')
+        continue
+      }
+      await applyBtn.click().catch(() => {})
+      await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+      await waitOutCaptcha(page, cfg, 'probe-form')
+      if (await confirmOtherCountry(page)) await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+
+      const flow = await classifyApplyFlow(page)
+      log.info(`   flow: ${flow.kind}${'reason' in flow ? ` (${flow.reason})` : ''} — ${page.url()}`)
+
+      const id = url.match(/vacancy\/(\d+)/)?.[1] ?? 'x'
+      const html = await dumpHtml(page, `form-${id}`)
+      const shot = resolve(PROBE_DIR, `form-${id}.png`)
+      await page.screenshot({ path: shot, fullPage: true }).catch(() => {})
+      log.info(`   saved ${html} · ${shot}`)
+
+      // The letter field on the response page is revealed by its own toggle; capture
+      // what appears after pressing it. Still nothing is submitted.
+      const toggle = page.locator('[data-qa="vacancy-response-letter-toggle"]').first()
+      if ((await toggle.count()) > 0) {
+        await toggle.click().catch(() => {})
+        await pause(cfg.limits.delayMs, cfg.limits.delayJitterMs)
+        const after = await dumpHtml(page, `form-${id}-letter`)
+        await page
+          .screenshot({ path: resolve(PROBE_DIR, `form-${id}-letter.png`), fullPage: true })
+          .catch(() => {})
+        log.info(`   letter toggle pressed, saved ${after}`)
+      }
+    }
+  } finally {
+    await ctx.close()
+  }
 }

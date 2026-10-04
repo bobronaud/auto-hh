@@ -133,7 +133,12 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
 
       let outcome
       try {
-        outcome = await applyToVacancy(page, cfg, { url: v.url, resume: route.resume, letter })
+        outcome = await applyToVacancy(page, cfg, {
+          url: v.url,
+          resume: route.resume,
+          letter,
+          vacancy: { title: v.title, company: v.company, description: v.description },
+        })
       } catch (e) {
         if (e instanceof HumanNeededError) {
           result.stopReason = e.state
@@ -187,15 +192,22 @@ function recordOutcome(
   letterId: number | null,
 ): void {
   const base = { vacancyId: v.id, runId, letterId }
+  // Form answers go next to the row they belong to — a dry run's answers included,
+  // since that is the only place they can be read: the form itself was never sent.
+  const withAnswers = (applicationId: number) => {
+    if ('answers' in outcome && outcome.answers?.length) {
+      repo.recordFormAnswers(applicationId, v.id, outcome.answers)
+    }
+  }
 
   switch (outcome.status) {
     case 'applied':
-      repo.recordApplication({ ...base, status: 'applied', screenshotPath: outcome.screenshot })
+      withAnswers(repo.recordApplication({ ...base, status: 'applied', screenshotPath: outcome.screenshot }))
       result.applied++
       break
 
     case 'dry_run':
-      repo.recordApplication({ ...base, status: 'dry_run', screenshotPath: outcome.screenshot })
+      withAnswers(repo.recordApplication({ ...base, status: 'dry_run', screenshotPath: outcome.screenshot }))
       result.dryRun++
       break
 
@@ -204,10 +216,12 @@ function recordOutcome(
         ...base,
         status: 'needs_human',
         needsHumanReason: outcome.reason,
+        // form_unanswered carries which question and why — the owner's whole lead.
+        errorMessage: outcome.detail ?? null,
         screenshotPath: outcome.screenshot,
       })
       result.needsHuman++
-      log.info(`   parked: ${outcome.reason}`)
+      log.info(`   parked: ${outcome.reason}${outcome.detail ? ` — ${outcome.detail}` : ''}`)
       break
 
     case 'skipped':
@@ -216,13 +230,15 @@ function recordOutcome(
       break
 
     case 'failed':
-      repo.recordApplication({
-        ...base,
-        status: 'failed',
-        errorCode: outcome.errorCode,
-        errorMessage: outcome.message,
-        screenshotPath: outcome.screenshot,
-      })
+      withAnswers(
+        repo.recordApplication({
+          ...base,
+          status: 'failed',
+          errorCode: outcome.errorCode,
+          errorMessage: outcome.message,
+          screenshotPath: outcome.screenshot,
+        }),
+      )
       result.failed++
       log.warn(`   failed: ${outcome.errorCode} — ${outcome.message}`)
       break

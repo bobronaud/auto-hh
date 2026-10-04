@@ -122,3 +122,18 @@ CREATE TABLE IF NOT EXISTS kv (
   value      TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Ответы на вопросы работодателя, как они ушли в форму (с 05.10). Пишутся и для
+-- пробного прогона: форма не отправлена, и других следов того, что модель ответила,
+-- нет. answer — читаемый вид: подписи вариантов, а не value из hh.
+CREATE TABLE IF NOT EXISTS form_answers (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  vacancy_id     INTEGER NOT NULL REFERENCES vacancies(id),
+  position       INTEGER NOT NULL,
+  question       TEXT    NOT NULL,
+  kind           TEXT    NOT NULL,
+  answer         TEXT    NOT NULL,
+  created_at     TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_form_answers_application ON form_answers (application_id);

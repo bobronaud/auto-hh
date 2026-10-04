@@ -322,11 +322,13 @@ export async function goto(page: Page, url: string, cfg?: Config): Promise<void>
   throw new HumanNeededError(state, shot)
 }
 
-export async function screenshot(page: Page, label: string): Promise<string> {
+export async function screenshot(page: Page, label: string, fullPage = false): Promise<string> {
   ensureDirs()
   const safe = label.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 60)
   const path = resolve(SCREENSHOT_DIR, `${Date.now()}-${safe}.png`)
-  await page.screenshot({ path, fullPage: false }).catch(() => {})
+  // fullPage for question forms: the answers run well below the fold, and a
+  // screenshot of the first two is no evidence of what was sent.
+  await page.screenshot({ path, fullPage }).catch(() => {})
   return path
 }
 

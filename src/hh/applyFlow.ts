@@ -7,19 +7,18 @@ const log = logger('apply')
 /**
  * hh has two apply flows, confirmed by probing live vacancies:
  *
- *   'modal'  — a dialog with a resume dropdown, a cover-letter toggle and submit.
- *              Fully automatable.
- *   'page'   — /applicant/vacancy_response opens as its own page carrying employer
- *              questions or a test. NOT automatable, and should not be: the answers
- *              are free-form text a human has to write, and a generated answer is
- *              worse than no answer.
+ *   'modal'      — a dialog with a resume dropdown, a cover-letter toggle and submit.
+ *   'questions'  — /applicant/vacancy_response opens as its own page carrying the
+ *                  employer's questions. Answered automatically since 05.10 (owner's
+ *                  call, reversing the earlier "a human has to write these"): the
+ *                  model answers, responseForm.ts fills it in.
  *
- * Anything in the second group is parked for manual handling rather than dropped —
- * these are often the most interesting vacancies, precisely because the employer
- * bothered to ask something.
+ * A separate hh test is still parked for manual handling, and so is a form the model
+ * could not answer (form_unanswered).
  */
 export type ApplyFlow =
   | { kind: 'modal' }
+  | { kind: 'questions' }
   | { kind: 'needs_human'; reason: NeedsHumanReason; detail?: string }
   | { kind: 'already_applied' }
   | { kind: 'blocked'; reason: 'limit_exceeded' | 'unknown'; detail?: string }
@@ -31,6 +30,7 @@ export type NeedsHumanReason =
   | 'external_apply'
   | 'resume_hidden'
   | 'unrecognised_form'
+  | 'form_unanswered'
 
 export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
   employer_questions: 'Вопросы работодателя',
@@ -39,6 +39,7 @@ export const NEEDS_HUMAN_LABEL: Record<NeedsHumanReason, string> = {
   external_apply: 'Отклик на стороннем сайте',
   resume_hidden: 'Резюме скрыто от работодателей',
   unrecognised_form: 'Незнакомая форма отклика',
+  form_unanswered: 'Не смог ответить на вопрос формы',
 }
 
 /**
@@ -88,9 +89,13 @@ export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
     if (await hasWithin(modal, selectors.apply.alreadyAppliedNotice)) {
       return { kind: 'already_applied' }
     }
-    // A dialog CAN carry questions — some employers ask inside the modal.
+    // A dialog CAN carry questions — some employers ask inside the modal. Answered
+    // like the page when it carries the same task-body markup; otherwise it is a
+    // shape we have never seen, and that goes to the human.
     if (await hasWithin(modal, selectors.apply.employerQuestions)) {
-      return { kind: 'needs_human', reason: 'employer_questions' }
+      return (await hasWithin(modal, selectors.responseForm.question))
+        ? { kind: 'questions' }
+        : { kind: 'needs_human', reason: 'employer_questions' }
     }
     // Resume hidden from employers: hh will refuse the application. The warning node
     // is always in the DOM as a collapsed container, so only VISIBILITY counts here.
@@ -134,8 +139,12 @@ export async function classifyApplyFlow(page: Page): Promise<ApplyFlow> {
     if (await hasWithin(scope, selectors.apply.testRedirect)) {
       return { kind: 'needs_human', reason: 'test_required' }
     }
+    // Before relocation on purpose: "Готовы ли вы к переезду?" is a common question
+    // in these forms, and the relocation warning matches its text.
     if (await hasWithin(scope, selectors.apply.employerQuestions)) {
-      return { kind: 'needs_human', reason: 'employer_questions' }
+      return (await hasWithin(scope, selectors.responseForm.question))
+        ? { kind: 'questions' }
+        : { kind: 'needs_human', reason: 'employer_questions' }
     }
     if (await hasWithin(scope, selectors.apply.relocationWarning)) {
       return { kind: 'needs_human', reason: 'relocation' }

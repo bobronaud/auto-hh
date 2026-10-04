@@ -1,7 +1,7 @@
 import { loadConfig, configSource } from './config/load.js';
 import { limitWarnings } from './config/schema.js';
 import { login, health } from './hh/auth.js';
-import { probe } from './hh/probe.js';
+import { probe, probeForms } from './hh/probe.js';
 import { getDb, closeDb } from './db/index.js';
 import { Repo } from './db/repo.js';
 import { isConfigured } from './llm/provider.js';
@@ -16,9 +16,13 @@ async function main(): Promise<void> {
       await login(loadConfig());
       break;
 
-    case 'probe':
-      await probe(loadConfig());
+    case 'probe': {
+      // --form <url…>: capture employer-question forms without submitting anything.
+      const args = process.argv.slice(3);
+      if (args[0] === '--form') await probeForms(loadConfig(), args.slice(1));
+      else await probe(loadConfig());
       break;
+    }
 
     case 'doctor':
       await doctor();
@@ -144,6 +148,7 @@ function review(): void {
     const reason = r.needs_human_reason ?? 'unknown';
     console.log(`  #${r.application_id}  ${r.title}`);
     console.log(`      ${r.company ?? '—'} · ${reason} · ${r.created_at.slice(0, 16).replace('T', ' ')}`);
+    if (r.error_message) console.log(`      ${r.error_message}`);
     console.log(`      ${r.url}`);
   }
   console.log(`\n  Handled one? npm run resolve -- <id>\n`);

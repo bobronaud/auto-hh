@@ -68,6 +68,8 @@ export interface NeedsHumanRow {
   company: string | null
   url: string
   needs_human_reason: string | null
+  /** For form_unanswered: which question stopped the form, and why. */
+  error_message: string | null
   created_at: string
   resolved_at: string | null
 }
@@ -89,6 +91,8 @@ export interface HistoryRow {
   resolved_at: string | null
   /** The letter that actually went with this application; null in static mode. */
   letter_text: string | null
+  /** Employer-form answers as a JSON array of {question, answer}; null without a form. */
+  answers_json: string | null
 }
 
 /** A queue row with the letter that is going to be sent with it, if there is one. */
@@ -485,6 +489,22 @@ export class Repo {
 
   // ------------------------------------------------------------- applications
 
+  /** What went into an employer's form for this application, in form order. */
+  recordFormAnswers(
+    applicationId: number,
+    vacancyId: number,
+    answers: ReadonlyArray<{ question: string; kind: string; answer: string }>,
+  ): void {
+    const stmt = this.db.prepare(
+      `INSERT INTO form_answers (application_id, vacancy_id, position, question, kind, answer, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    const at = now()
+    this.db.transaction(() => {
+      answers.forEach((a, i) => stmt.run(applicationId, vacancyId, i + 1, a.question, a.kind, a.answer, at))
+    })()
+  }
+
   recordApplication(a: {
     vacancyId: number
     runId?: number | null
@@ -614,7 +634,7 @@ export class Repo {
     return this.db
       .prepare(
         `SELECT a.id AS application_id, v.id AS vacancy_id, v.hh_id, v.title, v.company,
-                v.url, a.needs_human_reason, a.created_at, a.resolved_at
+                v.url, a.needs_human_reason, a.error_message, a.created_at, a.resolved_at
          FROM applications a
          JOIN vacancies v ON v.id = a.vacancy_id
          WHERE a.status = 'needs_human' ${where}
@@ -672,7 +692,11 @@ export class Repo {
       `SELECT a.id AS application_id, v.id AS vacancy_id, v.hh_id, v.title, v.company,
               v.url, a.status, a.error_code, a.error_message, a.needs_human_reason,
               a.screenshot_path, a.applied_at, a.created_at, a.resolved_at,
-              l.text AS letter_text
+              l.text AS letter_text,
+              (SELECT json_group_array(json_object('question', f.question, 'answer', f.answer))
+                 FROM (SELECT question, answer FROM form_answers
+                        WHERE application_id = a.id ORDER BY position) f
+                HAVING COUNT(*) > 0) AS answers_json
        FROM applications a
        JOIN vacancies v ON v.id = a.vacancy_id
        LEFT JOIN letters l ON l.id = a.letter_id

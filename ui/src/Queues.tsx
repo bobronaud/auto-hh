@@ -104,12 +104,13 @@ const REASONS: Record<string, string> = {
   relocation: 'релокация',
   external_apply: 'отклик на внешнем сайте',
   unrecognised_form: 'форма не опознана',
+  form_unanswered: 'не смог ответить на вопрос формы',
 }
 
 /**
- * The manual queue. These were refused on purpose — a generated answer to an
- * employer's question is worse than no answer, because it is exactly where the
- * employer is checking for a human.
+ * The manual queue: hh tests, unknown shapes, and question forms the model could not
+ * answer in full (form_unanswered — the question and the reason come along). Ordinary
+ * question forms are answered automatically since 05.10.
  */
 export function NeedsHuman({ version, onChange }: { version: number; onChange: () => void }) {
   const [includeResolved, setIncludeResolved] = useState(false)
@@ -148,8 +149,8 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
   return (
     <>
       <p className="dim">
-        Эти вакансии бот не откликает намеренно: вопросы работодателя и тестовые пишет человек.
-        Лимит на них не тратится.{' '}
+        Эти вакансии бот не откликнул: тестовые hh, незнакомые формы и формы с вопросами, на
+        которые он не смог ответить (причина под названием). Лимит на них не тратится.{' '}
         <label style={{ marginLeft: 8 }}>
           <input
             type="checkbox"
@@ -189,7 +190,10 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
                   <VacancyLink url={r.url} title={r.title} />
                 </td>
                 <td className="dim">{r.company ?? '—'}</td>
-                <td>{REASONS[r.needs_human_reason ?? ''] ?? r.needs_human_reason ?? '—'}</td>
+                <td>
+                  {REASONS[r.needs_human_reason ?? ''] ?? r.needs_human_reason ?? '—'}
+                  {r.error_message && <div className="dim mono">{r.error_message}</div>}
+                </td>
                 <td className="num dim nowrap">{dateTime(r.created_at)}</td>
                 <td className="nowrap">
                   {r.resolved_at ? (
@@ -347,7 +351,8 @@ export function History({ version }: { version: number }) {
       <p className="dim">
         Всё, что бот сделал, вместе со скриншотом подтверждения. Успех отклика подтверждается по
         странице, а не предполагается, — скриншот и есть это подтверждение. В колонке «письмо» —
-        текст, который ушёл вместе с этим откликом.{' '}
+        текст, который ушёл вместе с этим откликом, в «ответах» — что бот вписал в форму
+        вопросов работодателя (у пробных прогонов тоже).{' '}
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ marginLeft: 8 }}>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -369,6 +374,7 @@ export function History({ version }: { version: number }) {
               <th>статус</th>
               <th>подробности</th>
               <th>письмо</th>
+              <th>ответы</th>
               <th>скриншот</th>
               <th className="num">когда</th>
             </tr>
@@ -387,6 +393,9 @@ export function History({ version }: { version: number }) {
                 </td>
                 <td>
                   <LetterCell row={r} />
+                </td>
+                <td>
+                  <AnswersCell row={r} />
                 </td>
                 <td>
                   <Shot path={r.screenshot_path} />
@@ -519,6 +528,45 @@ function LetterCell({ row }: { row: HistoryRow }) {
           onClose={() => setOpen(false)}
         >
           <p className="letter-view">{row.letter_text}</p>
+        </Modal>
+      )}
+    </>
+  )
+}
+
+/**
+ * What went into the employer's question form. A dry run's answers are shown too —
+ * the form was never sent, so this is the only place to judge them.
+ */
+function AnswersCell({ row }: { row: HistoryRow }) {
+  const [open, setOpen] = useState(false)
+  if (!row.answers_json) return <span className="dim">—</span>
+  let answers: Array<{ question: string; answer: string }> = []
+  try {
+    answers = JSON.parse(row.answers_json)
+  } catch {
+    return <span className="dim">—</span>
+  }
+
+  return (
+    <>
+      <button type="button" className="small" onClick={() => setOpen(true)}>
+        открыть ({answers.length})
+      </button>
+      {open && (
+        <Modal
+          title={row.title}
+          subtitle={`${row.company ?? 'без компании'} · ${answers.length} вопросов`}
+          onClose={() => setOpen(false)}
+        >
+          {answers.map((a, i) => (
+            <div key={i} style={{ marginBottom: 14 }}>
+              <div className="dim">
+                {i + 1}. {a.question}
+              </div>
+              <p className="letter-view">{a.answer}</p>
+            </div>
+          ))}
         </Modal>
       )}
     </>

@@ -163,6 +163,8 @@ export const selectors = {
       'text=/Вы откликнулись/i',
     ],
     hasTestBadge: ['[data-qa="vacancy-response-link-top-with-test"]', 'text=/с тестовым заданием/i'],
+    /** «Опыт работы: 1–3 года». Подтверждено разведкой форм (05.10). */
+    experience: ['[data-qa="vacancy-experience"]'],
   },
 
   /**
@@ -174,9 +176,9 @@ export const selectors = {
    *      работодателя или тестовым): модалки нет вообще, форма открывается
    *      страницей. Именно сюда попала вторая проба.
    *
-   * Поток B автоматизации не подлежит: вопросы работодателя — свободный текст,
-   * который должен писать человек. Такие вакансии помечаются needs_human и
-   * откладываются в UI (см. applyFlow.ts).
+   * Поток B автоматизирован с 05.10 (решение владельца): вопросы работодателя
+   * заполняются по responseForm ниже, ответы пишет LLM. Ручным остаётся только
+   * отдельный тест hh (testRedirect).
    */
   apply: {
     modal: ['[data-qa="vacancy-response-popup"]', 'div[role="dialog"]'],
@@ -188,6 +190,8 @@ export const selectors = {
      */
     resumeSelect: [
       'div[role="dialog"] [role="button"]:has([data-qa="resume-title"])',
+      // Страница отклика с вопросами: тот же дропдаун, но без модалки вокруг.
+      'main form [role="button"]:has([data-qa="resume-title"])',
       '[data-qa="resume-select"]',
     ],
     /** Название выбранного резюме — по нему сверяем, что выбрали нужное. */
@@ -200,7 +204,12 @@ export const selectors = {
      *     <span data-qa="radio-container"><input type="radio" value="<id резюме>">
      *     <div data-qa="resume-title">…<div data-qa="cell-text-content">Название
      */
-    resumeOption: ['[data-qa="cell"]:has([data-qa="radio-container"])'],
+    // Варианты ответов на вопросы работодателя размечены ТАК ЖЕ (cell + radio-container),
+    // поэтому всё, что внутри task-body, исключено: иначе «Да»/«Нет» попадали бы в
+    // список резюме.
+    resumeOption: [
+      '[data-qa="cell"]:has([data-qa="radio-container"]):not([data-qa="task-body"] [data-qa="cell"])',
+    ],
     /** Текст названия внутри пункта — по нему выбираем нужное резюме. */
     resumeOptionText: ['[data-qa="cell-text-content"]'],
     /** value радио-инпута — стабильный id резюме, переживает переименование. */
@@ -208,6 +217,8 @@ export const selectors = {
     /** Подтверждено выгрузкой: data-qa не «vacancy-response-letter-toggle». */
     letterToggle: [
       '[data-qa="add-cover-letter"]',
+      // Страница отклика с вопросами: «Сопроводительное письмо · Добавить».
+      '[data-qa="vacancy-response-letter-toggle"]',
       'button:has-text("Добавить сопроводительное")',
     ],
 
@@ -294,6 +305,27 @@ export const selectors = {
     ],
     tooLongMessage: ['text=/слишком длинн/i', 'text=/превышена длина/i'],
     alreadyAppliedNotice: ['text=/Вы уже откликались/i', 'text=/Вы откликнулись/i'],
+  },
+
+  /**
+   * Форма вопросов работодателя на /applicant/vacancy_response. Снято с живых дампов
+   * (data/probe/form-*.html, 05.10):
+   *
+   *   <div data-qa="task-body">
+   *     <div data-qa="task-question">Текст вопроса</div>
+   *     текст:  <textarea name="task_<id>_text">
+   *     радио:  <label data-qa="cell"><input type="radio" name="task_<id>" value="<opt>">
+   *             <span data-qa="cell-text-content">Да</span></label> …
+   *             «Свой вариант» — value="open" плюс textarea task_<id>_text
+   *
+   * Ниже формы — тот же дропдаун резюме, переключатель письма
+   * vacancy-response-letter-toggle и кнопка vacancy-response-submit-popup.
+   * Чекбоксов в дампах не было; разбираются по той же схеме, что радио.
+   */
+  responseForm: {
+    question: ['[data-qa="task-body"]'],
+    questionText: ['[data-qa="task-question"]'],
+    optionText: ['[data-qa="cell-text-content"]'],
   },
 } as const
 

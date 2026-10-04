@@ -42,7 +42,7 @@ export const PROBLEM_LABEL: Record<LetterProblem, string> = {
  * and thin spaces, emoji. `tidyLetter` replaces all of them, so reaching this check
  * means the repair missed something new.
  */
-const TYPOGRAPHY =
+export const TYPOGRAPHY =
   /[—–―…«»“”„‘’‹›•‣▪◦→←⇒✓✔★]|[\u00a0\u202f\u2009\u200b]|[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{FE0F}]/u
 
 /**
@@ -52,7 +52,7 @@ const TYPOGRAPHY =
  *
  * \p{L} throughout: \w and \b are ASCII-only in JS and match nothing in Russian.
  */
-const SELF_DEPRECATING =
+export const SELF_DEPRECATING =
   /не\s+(?:работал|использовал|применял|знаком|владею|имею\s+опыт|приходилось|доводилось|успел)|нет\s+(?:коммерческого\s+)?опыта|отсутств\p{L}*\s+опыт|пока\s+не\s+\p{L}*(?:работал|использовал|знаком)|быстро\s+(?:освою|изучу|разберусь|выучу|подтяну)|готов\s+(?:изучить|освоить|научиться|подтянуть)|только\s+начинаю|слаб\p{L}*\s+сторон|без\s+(?:\p{L}+\s+){0,2}опыта|не\s+(?:пугает|страшно|смущает|проблема)|хотя\s+и\s+не\s/iu
 
 /**
@@ -84,7 +84,7 @@ export interface Validation {
 const PLACEHOLDER = /\[(?:имя|название|компан|вакан|ваше|укажите|your|name|company)[^\]]*\]|\{\{[^}]+\}\}/i
 
 /** The model talking about itself or about the task instead of writing the letter. */
-const META =
+export const META =
   /как (?:языковая )?модель|как (?:ии|ai)|я не могу|вот (?:письмо|текст|вариант)|конечно[,!]|надеюсь, это подойд/i
 
 /**
@@ -93,7 +93,7 @@ const META =
  * \p{L} rather than \w: the latter is ASCII-only in JS, so a bullet list in Russian
  * ("- Опыт работы") sailed straight past this check.
  */
-const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
+export const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
 
 export function validateLetter(text: string, cfg: Config): Validation {
   const problems: LetterProblem[] = []

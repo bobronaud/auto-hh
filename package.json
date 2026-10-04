@@ -21,7 +21,8 @@
     "apply": "tsx src/cli.ts apply",
     "failures": "tsx src/cli.ts failures",
     "requeue": "tsx src/cli.ts requeue",
-    "letters": "tsx src/cli.ts letters"
+    "letters": "tsx src/cli.ts letters",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

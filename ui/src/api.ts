@@ -106,6 +106,8 @@ export interface NeedsHumanRow {
   company: string | null
   url: string
   needs_human_reason: string | null
+  /** For form_unanswered: which question stopped the form, and why. */
+  error_message: string | null
   created_at: string
   resolved_at: string | null
 }
@@ -138,6 +140,8 @@ export interface HistoryRow {
   resolved_at: string | null
   /** The letter sent with this application. null in static mode — nothing is stored. */
   letter_text: string | null
+  /** Employer-form answers, JSON array of {question, answer}. null when there was no form. */
+  answers_json: string | null
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
