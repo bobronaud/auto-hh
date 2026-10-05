@@ -195,7 +195,14 @@ async function typeAnswer(page: Page, text: string, oldSrc: string | null): Prom
   if (!input || !submit) return 'no_form'
 
   try {
-    await input.fill(text)
+    // Typed key by key, ~0.5s apart (owner, 05.10): fill() pasted the whole value in
+    // one input event, and hh rejected correctly read text as "Неверный текст".
+    await input.click()
+    await input.fill('')
+    for (const ch of text) {
+      await page.keyboard.type(ch)
+      await pause(500, 60)
+    }
     await submit.click()
   } catch {
     return 'no_form'
