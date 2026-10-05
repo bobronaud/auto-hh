@@ -3,11 +3,11 @@ import { api, type RunMode } from './api';
 import { useLive } from './live';
 import { Dashboard } from './Dashboard';
 import { LogPanel } from './LogPanel';
-import { ConfigView, Failures, History, NeedsHuman, Pending } from './Queues';
+import { Chats, ConfigView, Failures, History, NeedsHuman, Pending } from './Queues';
 import { ErrorLine, dateTime } from './common';
 import logo from '../logo.png';
 
-type Tab = 'dashboard' | 'pending' | 'needs_human' | 'failed' | 'history' | 'config';
+type Tab = 'dashboard' | 'pending' | 'needs_human' | 'failed' | 'history' | 'chats' | 'config';
 
 export function App() {
   const { state, error, logs, connected, refresh } = useLive();
@@ -76,6 +76,7 @@ export function App() {
     ['needs_human', 'ручные', state.counts.needsHuman],
     ['failed', 'неуспешные', state.counts.failed],
     ['history', 'история', state.counts.appliedTotal],
+    ['chats', 'чаты', state.counts.chatsNeedingHuman],
     ['config', 'конфиг', null],
   ];
 
@@ -140,6 +141,9 @@ export function App() {
                 <option value={0}>всё время</option>
               </select>
               <button onClick={() => void run('collect', { period: collectPeriod })}>собрать вакансии</button>
+              <button onClick={() => void run('chats')} title='ответить ИИ-помощнику hh в чатах после откликов'>
+                разобрать чаты
+              </button>
               <button onClick={() => void run('session')}>проверить сессию</button>
             </>
           )}
@@ -163,6 +167,7 @@ export function App() {
           {tab === 'needs_human' && <NeedsHuman version={version} onChange={bump} />}
           {tab === 'failed' && <Failures version={version} onChange={bump} />}
           {tab === 'history' && <History version={version} />}
+          {tab === 'chats' && <Chats version={version} onChange={bump} />}
           {tab === 'config' && <ConfigView state={state} />}
         </main>
         <LogPanel logs={logs} connected={connected} />

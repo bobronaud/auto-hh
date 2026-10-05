@@ -20,6 +20,8 @@ export interface DashboardState {
     vacancies: number
     pending: number
     needsHuman: number
+    /** Chats left to the owner: unanswerable, a live recruiter, or an unconfirmed send. */
+    chatsNeedingHuman: number
     failed: number
     appliedTotal: number
     appliedDay: number
@@ -61,6 +63,7 @@ export function dashboardState(): DashboardState {
       vacancies: repo.countVacancies(),
       pending: repo.countPending(),
       needsHuman: repo.countNeedsHuman(),
+      chatsNeedingHuman: repo.countChatsNeedingHuman(),
       failed: repo.countFailed(),
       appliedTotal: byStatus.applied ?? 0,
       appliedDay: repo.countAppliedWithin(24),

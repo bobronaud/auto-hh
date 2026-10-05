@@ -22,6 +22,7 @@
     "failures": "tsx src/cli.ts failures",
     "requeue": "tsx src/cli.ts requeue",
     "letters": "tsx src/cli.ts letters",
+    "chats": "tsx src/cli.ts chats",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

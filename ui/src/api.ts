@@ -16,7 +16,7 @@ export interface LimitState {
   nextSlotAt?: string
 }
 
-export type RunMode = 'collect' | 'apply' | 'session'
+export type RunMode = 'collect' | 'apply' | 'session' | 'chats'
 
 export interface RunState {
   mode: RunMode
@@ -35,6 +35,7 @@ export interface DashboardState {
     vacancies: number
     pending: number
     needsHuman: number
+    chatsNeedingHuman: number
     failed: number
     appliedTotal: number
     appliedDay: number
@@ -66,6 +67,31 @@ export interface ApplyResult {
   skipped: number
   failed: number
   stopReason?: string
+}
+
+export interface ChatRunResult {
+  passes: number
+  chats: number
+  answered: number
+  needsHuman: number
+  human: number
+  finished: number
+  failed: number
+  stopReason?: string
+}
+
+export interface ChatReplyRow {
+  id: number
+  chat_id: string
+  title: string | null
+  company: string | null
+  question: string
+  answer: string | null
+  status: 'sent' | 'needs_human' | 'human' | 'failed'
+  reason: string | null
+  screenshot_path: string | null
+  resolved_at: string | null
+  created_at: string
 }
 
 export interface HealthReport {
@@ -170,6 +196,9 @@ export const api = {
     json<{ rows: HistoryRow[] }>(`/api/history?status=${status}&limit=${limit}`),
   config: () =>
     json<{ path: string; raw: string | null; warnings: string[]; config: unknown }>('/api/config'),
+  chats: (includeResolved = false) =>
+    json<{ rows: ChatReplyRow[] }>(`/api/chats?includeResolved=${includeResolved}`),
+  resolveChat: (id: number) => post<{ ok: true }>(`/api/chats/${id}/resolve`),
   resolve: (id: number) => post<{ ok: true }>(`/api/needs-human/${id}/resolve`),
   resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
   approveLetter: (id: number, text?: string) =>

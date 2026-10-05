@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import {
   api,
   type ApplyResult,
+  type ChatRunResult,
   type CollectResult,
   type DashboardState,
   type HealthReport,
@@ -186,6 +187,7 @@ const RUN_TITLES: Record<RunMode, string> = {
   collect: 'сбор вакансий',
   apply: 'отклики',
   session: 'проверка сессии',
+  chats: 'разбор чатов',
 };
 
 function duration(fromIso: string, toIso: string): string {
@@ -246,6 +248,19 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
         ['ручные', r.needsHuman, 'warn'],
         ['пропущено', r.skipped],
         ['неуспешно', r.failed, 'danger'],
+        ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
+      ];
+    }
+    case 'chats': {
+      const r = result as ChatRunResult;
+      if (typeof r.passes !== 'number') return null;
+      return [
+        ['проходов', r.passes],
+        ['чатов', r.chats],
+        ['отвечено', r.answered, 'ok'],
+        ['оставлено вам', r.needsHuman + r.human, 'warn'],
+        ['помощник закончил', r.finished],
+        ['не отправилось', r.failed, 'danger'],
         ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
       ];
     }

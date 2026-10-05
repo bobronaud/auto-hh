@@ -457,3 +457,8 @@ pre.json {
 .run-stats dd.warn { color: var(--warn); font-weight: 600; }
 .run-stats dd.danger { color: var(--danger); font-weight: 600; }
 .run-json { margin-top: 10px; }
+
+/* Chats tab: status colours inline, the question/answer text keeps its line breaks. */
+.ok-text { color: var(--ok); }
+.warn-text { color: var(--warn); }
+.pre-wrap { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 420px; }

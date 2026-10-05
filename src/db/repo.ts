@@ -74,6 +74,23 @@ export interface NeedsHumanRow {
   resolved_at: string | null
 }
 
+export type ChatReplyStatus = 'sent' | 'needs_human' | 'human' | 'failed'
+
+export interface ChatReplyRow {
+  id: number
+  chat_id: string
+  vacancy_id: number | null
+  title: string | null
+  company: string | null
+  question: string
+  answer: string | null
+  status: ChatReplyStatus
+  reason: string | null
+  screenshot_path: string | null
+  resolved_at: string | null
+  created_at: string
+}
+
 export interface HistoryRow {
   application_id: number
   vacancy_id: number
@@ -792,5 +809,77 @@ export class Repo {
          ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       )
       .run(key, value, now())
+  }
+
+  // --------------------------------------------------------------------- chats
+
+  recordChatReply(r: {
+    chatId: string
+    vacancyId?: number | null
+    title?: string | null
+    company?: string | null
+    question: string
+    answer?: string | null
+    status: ChatReplyStatus
+    reason?: string | null
+    screenshotPath?: string | null
+  }): number {
+    const res = this.db
+      .prepare(
+        `INSERT INTO chat_replies
+           (chat_id, vacancy_id, title, company, question, answer, status, reason, screenshot_path, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        r.chatId,
+        r.vacancyId ?? null,
+        r.title ?? null,
+        r.company ?? null,
+        r.question,
+        r.answer ?? null,
+        r.status,
+        r.reason ?? null,
+        r.screenshotPath ?? null,
+        now(),
+      )
+    return Number(res.lastInsertRowid)
+  }
+
+  /**
+   * Has this exact question in this chat been dealt with already — answered, or left
+   * to the owner? Either way it must not be answered again: a duplicate reply reads
+   * as a bot, and a question parked for the owner stays his.
+   */
+  chatQuestionHandled(chatId: string, question: string): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM chat_replies
+         WHERE chat_id = ? AND question = ? AND status IN ('sent', 'needs_human', 'human')`,
+      )
+      .get(chatId, question)
+  }
+
+  chatReplies(opts: { includeResolved?: boolean; limit?: number } = {}): ChatReplyRow[] {
+    // Sent replies need no resolving, so "resolved" only hides the owner's rows.
+    const where = opts.includeResolved ? '' : `WHERE status = 'sent' OR resolved_at IS NULL`
+    return this.db
+      .prepare(`SELECT * FROM chat_replies ${where} ORDER BY created_at DESC, id DESC LIMIT ?`)
+      .all(opts.limit ?? 300) as ChatReplyRow[]
+  }
+
+  resolveChatReply(id: number): void {
+    this.db
+      .prepare(`UPDATE chat_replies SET resolved_at = ? WHERE id = ? AND resolved_at IS NULL`)
+      .run(now(), id)
+  }
+
+  countChatsNeedingHuman(): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM chat_replies
+         WHERE status IN ('needs_human', 'human', 'failed') AND resolved_at IS NULL`,
+      )
+      .get() as { n: number }
+    return row.n
   }
 }

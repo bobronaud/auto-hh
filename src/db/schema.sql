@@ -137,3 +137,24 @@ CREATE TABLE IF NOT EXISTS form_answers (
   created_at     TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_form_answers_application ON form_answers (application_id);
+
+-- Разбор чатов с ИИ-помощником hh (с 05.10). Строка — одно событие в одном чате:
+-- sent — ответ ушёл; needs_human — модель не знает ответа или ответ не прошёл
+-- проверку, чат оставлен владельцу; human — последним написал живой рекрутер, мы
+-- открыли чат (он стал прочитанным) и не отвечали; failed — отправка не подтвердилась.
+-- В applications ничего не пишется: к очереди откликов чаты отношения не имеют.
+CREATE TABLE IF NOT EXISTS chat_replies (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id         TEXT    NOT NULL,
+  vacancy_id      INTEGER REFERENCES vacancies(id) ON DELETE SET NULL,
+  title           TEXT,
+  company         TEXT,
+  question        TEXT    NOT NULL,
+  answer          TEXT,
+  status          TEXT    NOT NULL,
+  reason          TEXT,
+  screenshot_path TEXT,
+  resolved_at     TEXT,
+  created_at      TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_replies_chat ON chat_replies (chat_id);

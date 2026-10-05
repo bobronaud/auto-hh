@@ -376,3 +376,82 @@ export async function probeForms(cfg: Config, urls: readonly string[]): Promise<
     await ctx.close()
   }
 }
+
+/**
+ * Capture hh's chat: the list, the list with "только непрочитанные" on, and one chat.
+ * NOTHING is sent. The chat is a separate app and may live in an iframe, so every
+ * frame is dumped, not only the top document.
+ *
+ * Opening an unread chat marks it read, so unless an id is given the chat opened is
+ * one that is NOT in the unread list.
+ */
+export async function probeChats(cfg: Config, chatId?: string): Promise<void> {
+  const ctx = await openContext({ ...cfg, browser: { ...cfg.browser, headless: false } })
+  const page = await getPage(ctx)
+  try {
+    await goto(page, `${HH_BASE}/chat`, cfg)
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+    const all = await dumpFrames(page, 'chat-list')
+    log.info(`chat list: ${all.links.length} chat links`)
+
+    let unread: string[] = []
+    const toggle = await findInFrames(page, (f) => f.getByText(/только непрочитанные/i).first())
+    if (toggle) {
+      await toggle.click().catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+      unread = (await dumpFrames(page, 'chat-list-unread')).links
+      log.info(`unread only: ${unread.length} chat links`)
+      await toggle.click().catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+    } else {
+      log.warn('"только непрочитанные" not found in any frame')
+    }
+
+    const target = chatId
+      ? `${HH_BASE}/chat/${chatId}`
+      : all.links.find((l) => !unread.includes(l))
+    if (!target) {
+      log.warn('no read chat to open — pass an id: selectors:probe -- --chat <id>')
+      return
+    }
+    log.info(`opening ${target}`)
+    await goto(page, target, cfg)
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+    await dumpFrames(page, 'chat-open')
+  } finally {
+    await ctx.close()
+  }
+}
+
+/** Every frame's HTML plus one full screenshot; returns chat links found anywhere. */
+async function dumpFrames(page: Page, label: string): Promise<{ links: string[] }> {
+  const stamp = Date.now()
+  await page.screenshot({ path: resolve(PROBE_DIR, `${label}-${stamp}.png`), fullPage: true }).catch(() => {})
+  const links = new Set<string>()
+  for (const [i, frame] of page.frames().entries()) {
+    try {
+      const html = await frame.content()
+      const path = resolve(PROBE_DIR, `${label}-${stamp}-frame${i}.html`)
+      writeFileSync(path, `<!-- ${frame.url()} -->\n${html}`, 'utf8')
+      log.info(`   frame ${i}: ${frame.url()} (${html.length} bytes) → ${path}`)
+      const hrefs = await frame
+        .locator('a[href*="/chat/"]')
+        .evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href))
+      for (const h of hrefs) if (/\/chat\/\d+/.test(h)) links.add(h)
+    } catch (e) {
+      log.debug(`frame ${i} dump failed: ${(e as Error).message}`)
+    }
+  }
+  return { links: [...links] }
+}
+
+async function findInFrames(
+  page: Page,
+  pick: (f: import('playwright').Frame) => import('playwright').Locator,
+): Promise<import('playwright').Locator | null> {
+  for (const frame of page.frames()) {
+    const loc = pick(frame)
+    if ((await loc.count().catch(() => 0)) > 0) return loc
+  }
+  return null
+}

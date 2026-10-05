@@ -93,7 +93,7 @@ function checkText(raw: string): { answer: FormAnswer } | { problem: string } {
  * The same checks a letter gets, minus the ones that do not apply: a GitHub link is a
  * legitimate answer here, and a one-word "Да" is not "suspiciously short".
  */
-function textProblem(text: string): string | null {
+export function textProblem(text: string): string | null {
   if (!text) return 'пустой ответ'
   if (text.length > ANSWER_MAX_CHARS) return `ответ длиннее ${ANSWER_MAX_CHARS} символов (${text.length})`
   for (const [re, label] of [

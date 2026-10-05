@@ -348,6 +348,57 @@ export const selectors = {
     questionText: ['[data-qa="task-question"]'],
     optionText: ['[data-qa="cell-text-content"]'],
   },
+
+  /**
+   * Чат с работодателем (chatik), hh.ru/chat и hh.ru/chat/<id>. Снято с живых дампов
+   * data/probe/chat-*.html (05.10); урезанная копия — test/fixtures/chat-open.html.
+   * Живёт в основном документе, не в iframe.
+   *
+   * Сообщение — [data-qa="chatik-chat-message-<id>"]; внутри либо пузырь
+   * (chat-bubble-wrapper), либо системная строка participant-action-message-N
+   * («Пользователь ИИ-помощник присоединился к чату / покинул чат»).
+   * Своё от чужого — по статусу доставки, см. ownMark.
+   * Имя автора (chat-bubble-author-name, «ИИ-помощник») стоит только у ПЕРВОГО
+   * сообщения серии — для следующих автор переносится.
+   * Кнопки «отправить» в дампе нет: при пустом поле на её месте запись голоса.
+   * Кандидаты ниже — догадки, при отсутствии отправляем Enter.
+   */
+  chat: {
+    onlyUnread: ['input[data-qa="chatik-checkbox-only-unread"]'],
+    /** Сам input скрыт под отрисованным чекбоксом, кликается подпись вокруг него. */
+    onlyUnreadLabel: ['label:has(input[data-qa="chatik-checkbox-only-unread"])'],
+    listSkeleton: ['[data-qa="chats-list-skeleton-wrapper"]'],
+    /** Ссылка на чат в списке; id — в хвосте data-qa и в href /chat/<id>. */
+    listItem: ['a[data-qa^="chatik-open-chat-"]'],
+    listTitle: ['[data-qa="chat-cell-title"]'],
+    listCompany: ['[data-qa="chat-cell-subtitle"]'],
+    message: ['[data-qa^="chatik-chat-message-"]:not([data-qa$="-text"])'],
+    systemMessage: ['[data-qa^="participant-action-message"]'],
+    bubble: ['[data-qa="chat-bubble-wrapper"]'],
+    bubbleText: ['[data-qa="chat-bubble-text"]'],
+    bubbleTitle: ['[data-qa="chat-bubble-title"]'],
+    authorName: ['[data-qa="chat-bubble-author-name"]'],
+    /**
+     * Статус доставки есть только у своих: chat-bubble-icon-delivered, -read. У чужих
+     * иконки либо нет (отказ работодателя), либо chat-bubble-icon-hidden — поэтому
+     * своё узнаётся по наличию статуса, а не чужое по icon-hidden.
+     */
+    ownMark: [
+      '[data-qa^="chat-bubble-icon-"]:not([data-qa="chat-bubble-icon-hidden"])',
+      '[data-qa="desktop-message-menu"]',
+    ],
+    headerTitle: ['[data-qa="participant-info-title"]'],
+    /** «Вакансия» + название + «Перейти» одним текстом. */
+    headerVacancy: ['[data-qa="chatik-header-sub-header"]'],
+    vacancyLink: ['a[data-qa="chatik-header-vacancy-link"]'],
+    input: ['[data-qa="chatik-message-input"] textarea', 'textarea[data-qa="text-input"]'],
+    send: [
+      '[data-qa="chatik-message-input"] button[aria-label*="Отправить"]',
+      '[data-qa="chatik-do-send-message"]',
+      '[data-qa="chat-input-send"]',
+      '[data-qa="chatik-message-input"] [data-qa*="send"]',
+    ],
+  },
 } as const
 
 /**

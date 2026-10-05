@@ -1,7 +1,7 @@
 import { loadConfig, configSource } from './config/load.js';
 import { limitWarnings } from './config/schema.js';
 import { login, health } from './hh/auth.js';
-import { probe, probeForms } from './hh/probe.js';
+import { probe, probeForms, probeChats } from './hh/probe.js';
 import { getDb, closeDb } from './db/index.js';
 import { Repo } from './db/repo.js';
 import { isConfigured } from './llm/provider.js';
@@ -20,6 +20,8 @@ async function main(): Promise<void> {
       // --form <url…>: capture employer-question forms without submitting anything.
       const args = process.argv.slice(3);
       if (args[0] === '--form') await probeForms(loadConfig(), args.slice(1));
+      // --chat [id]: capture the chat list and one chat. Nothing is sent.
+      else if (args[0] === '--chat') await probeChats(loadConfig(), args[1]);
       else await probe(loadConfig());
       break;
     }
@@ -67,6 +69,12 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'chats': {
+      const { runChats } = await import('./pipeline/chats.js');
+      console.log(await runChats(loadConfig()));
+      break;
+    }
+
     case 'review':
       review();
       break;
@@ -89,6 +97,7 @@ auto-hh
   npm run collect          Scrape the search results, filter and route. Sends nothing.
   npm run letters -- <n>   Write cover letters for the next n vacancies in the queue.
   npm run apply -- <n>     Answer up to n stored vacancies (dry run unless dryRun=false).
+  npm run chats            Answer hh's AI assistant in the chats after applications.
   npm run review           List vacancies parked for manual handling.
   npm run failures         List applications that did not go through, with causes.
   npm run requeue -- <code>  Put failed vacancies back in the queue after a fix.

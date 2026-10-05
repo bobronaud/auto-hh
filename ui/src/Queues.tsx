@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, screenshotUrl, type DashboardState, type HistoryRow, type PendingRow } from './api'
+import { api, screenshotUrl, type ChatReplyRow, type DashboardState, type HistoryRow, type PendingRow } from './api'
 import { CopyPath, Empty, ErrorLine, Lightbox, Modal, VacancyLink, dateTime, useFetch } from './common'
 
 /** Pending queue, in the exact order the next run will walk it. */
@@ -568,6 +568,103 @@ function AnswersCell({ row }: { row: HistoryRow }) {
             </div>
           ))}
         </Modal>
+      )}
+    </>
+  )
+}
+
+const CHAT_STATUS: Record<ChatReplyRow['status'], [string, string]> = {
+  sent: ['отвечено', 'ok-text'],
+  needs_human: ['не смог ответить', 'warn-text'],
+  human: ['пишет рекрутер', 'warn-text'],
+  failed: ['не отправилось', 'danger-text'],
+}
+
+/**
+ * Chat run output: every reply sent to hh's AI assistant, plus the chats it left to
+ * the owner. Those were opened by the bot and are already read on hh — this tab is
+ * the only place they still look new.
+ */
+export function Chats({ version, onChange }: { version: number; onChange: () => void }) {
+  const [includeResolved, setIncludeResolved] = useState(false)
+  const { data, error, reload } = useFetch(() => api.chats(includeResolved), [version, includeResolved])
+  const [busy, setBusy] = useState<number | null>(null)
+
+  const resolve = async (id: number): Promise<void> => {
+    setBusy(id)
+    try {
+      await api.resolveChat(id)
+      reload()
+      onChange()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (error) return <ErrorLine error={error} />
+  if (!data) return <Empty>загрузка…</Empty>
+
+  return (
+    <>
+      <p className="dim">
+        Ответы ИИ-помощнику hh и чаты, оставленные вам: живой рекрутер или вопрос, на который бот
+        не смог ответить. Бот их уже открыл, на hh они прочитанные.{' '}
+        <label style={{ marginLeft: 8 }}>
+          <input
+            type="checkbox"
+            checked={includeResolved}
+            onChange={(e) => setIncludeResolved(e.target.checked)}
+          />{' '}
+          показывать разобранные
+        </label>
+      </p>
+      {data.rows.length === 0 ? (
+        <Empty>чатов ещё не было — «разобрать чаты» в шапке</Empty>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>вакансия</th>
+              <th>вопрос</th>
+              <th>ответ</th>
+              <th>статус</th>
+              <th className="num">когда</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r) => {
+              const [label, cls] = CHAT_STATUS[r.status]
+              return (
+                <tr key={r.id}>
+                  <td>
+                    <a href={`https://hh.ru/chat/${r.chat_id}`} target="_blank" rel="noreferrer">
+                      {r.title ?? `чат ${r.chat_id}`}
+                    </a>
+                    {r.company && <div className="dim">{r.company}</div>}
+                  </td>
+                  <td className="pre-wrap">{r.question}</td>
+                  <td className="pre-wrap">{r.answer ?? <span className="dim">—</span>}</td>
+                  <td>
+                    <span className={cls}>{label}</span>
+                    {r.reason && <div className="dim mono">{r.reason}</div>}
+                    {r.screenshot_path && <Shot path={r.screenshot_path} />}
+                  </td>
+                  <td className="num dim nowrap">{dateTime(r.created_at)}</td>
+                  <td className="nowrap">
+                    {r.status === 'sent' ? null : r.resolved_at ? (
+                      <span className="dim">разобрано {dateTime(r.resolved_at)}</span>
+                    ) : (
+                      <button className="small" disabled={busy === r.id} onClick={() => void resolve(r.id)}>
+                        разобрал
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       )}
     </>
   )

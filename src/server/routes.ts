@@ -10,7 +10,7 @@ import { dashboardState } from './state.js'
 import { sseHandler, pingState } from './events.js'
 import { startRun, BusyError, currentRun, type RunMode } from './runner.js'
 
-const RUN_MODES: RunMode[] = ['collect', 'apply', 'session']
+const RUN_MODES: RunMode[] = ['collect', 'apply', 'session', 'chats']
 /** Collect periods the UI offers; 0 is "all time". hh itself only knows 1/3/7/30. */
 const COLLECT_PERIODS = [0, 3, 7]
 
@@ -68,6 +68,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/api/runs', () => ({ rows: repo.recentRuns() }))
+
+  /** What the chat run said, and the chats it left to the owner. */
+  app.get<{ Querystring: { includeResolved?: string } }>('/api/chats', (req) => ({
+    rows: repo.chatReplies({ includeResolved: req.query.includeResolved === 'true' }),
+  }))
+
+  app.post<{ Params: { id: string } }>('/api/chats/:id/resolve', (req, reply) => {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad chat reply id' })
+    repo.resolveChatReply(id)
+    pingState('chats:resolved')
+    return { ok: true, id }
+  })
 
   // ------------------------------------------------------------------ actions
 
