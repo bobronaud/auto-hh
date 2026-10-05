@@ -616,6 +616,18 @@ export class Repo {
   }
 
   /**
+   * Put one manual-queue vacancy back in the queue by dropping its needs_human row —
+   * for when its cause is gone (an answer added to the profile, a new selector).
+   * Manual for the same reason as requeueFailed.
+   */
+  requeueNeedsHumanOne(applicationId: number): boolean {
+    const res = this.db
+      .prepare(`DELETE FROM applications WHERE id = ? AND status = 'needs_human'`)
+      .run(applicationId)
+    return res.changes > 0
+  }
+
+  /**
    * Mark one failure as a real application, after checking on hh that it went through
    * (a `no_success_confirmation` whose response is in fact in the hh history).
    *

@@ -201,6 +201,7 @@ export const api = {
     json<{ rows: ChatReplyRow[] }>(`/api/chats?includeResolved=${includeResolved}`),
   resolveChat: (id: number) => post<{ ok: true }>(`/api/chats/${id}/resolve`),
   resolve: (id: number) => post<{ ok: true }>(`/api/needs-human/${id}/resolve`),
+  requeueNeedsHuman: (id: number) => post<{ ok: true; id: number }>(`/api/needs-human/${id}/requeue`),
   resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
   approveLetter: (id: number, text?: string) =>
     post<{ ok: true; id: number }>(`/api/letters/${id}/approve`, text === undefined ? {} : { text }),

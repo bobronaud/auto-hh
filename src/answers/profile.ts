@@ -6,6 +6,7 @@
  * Salary is not here — it depends on the vacancy, see salary.ts.
  */
 export const PROFILE_FACTS: readonly string[] = [
+  'ФИО: Носков Александр Сергеевич.',
   'Город проживания: Москва.',
   'Гражданство: гражданин РФ. Есть разрешение на работу в РФ и во всех странах СНГ.',
   'Готовность к переезду: да, готов.',

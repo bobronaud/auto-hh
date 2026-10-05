@@ -93,6 +93,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, id }
   })
 
+  /** Back in the queue once the cause is fixed (an answer added to the profile). */
+  app.post<{ Params: { id: string } }>('/api/needs-human/:id/requeue', (req, reply) => {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad application id' })
+    if (!repo.requeueNeedsHumanOne(id)) return reply.code(409).send({ error: 'not a needs_human application' })
+    pingState('needs-human:requeued')
+    return { ok: true, id }
+  })
+
   /**
    * The same, for everything open at once. A queue of twenty is twenty clicks, and a
    * queue nobody clears is a queue nobody reads.

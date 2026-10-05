@@ -130,6 +130,17 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
     }
   }
 
+  const requeue = async (id: number): Promise<void> => {
+    setBusy(id)
+    try {
+      await api.requeueNeedsHuman(id)
+      reload()
+      onChange()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const resolveAll = async (): Promise<void> => {
     setBusyAll(true)
     try {
@@ -162,7 +173,7 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
       </p>
       {open > 0 && (
         <button
-          className="small"
+          className="small ok"
           disabled={busyAll}
           onClick={() => void resolveAll()}
           style={{ marginBottom: 10 }}
@@ -200,13 +211,20 @@ export function NeedsHuman({ version, onChange }: { version: number; onChange: (
                     <span className="dim">разобрано {dateTime(r.resolved_at)}</span>
                   ) : (
                     <button
-                      className="small"
+                      className="small ok"
                       disabled={busy === r.application_id}
                       onClick={() => void resolve(r.application_id)}
                     >
                       разобрал
                     </button>
-                  )}
+                  )}{' '}
+                  <button
+                    className="small"
+                    disabled={busy === r.application_id}
+                    onClick={() => void requeue(r.application_id)}
+                  >
+                    вернуть в очередь
+                  </button>
                 </td>
               </tr>
             ))}
