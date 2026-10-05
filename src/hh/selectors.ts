@@ -84,10 +84,14 @@ export const selectors = {
     captchaPicture: ['img[data-qa="account-captcha-picture"]', 'img[src*="/captcha/picture"]'],
     captchaInput: ['input[data-qa="account-captcha-input"]', 'input[name="captchaText"]'],
     /**
-     * «Отправить» капчи — submit в той же форме, что и поле. Модалка отклика под ней
-     * тоже имеет submit, поэтому ищем только рядом с полем капчи.
+     * «Отправить» капчи. На живом hh <form> вокруг поля НЕТ: поле в теле диалога, кнопка
+     * в modal-footer того же role="dialog" (дампы 05.10; первая версия искала
+     * form:has(...) и не совпадала ни разу). Модалка отклика под капчей тоже имеет
+     * submit, поэтому ищем только в диалоге, где лежит поле капчи.
      */
     captchaSubmit: [
+      '[role="dialog"]:has(input[data-qa="account-captcha-input"]) [data-qa="modal-footer"] button[type="submit"]',
+      '[role="dialog"]:has(input[data-qa="account-captcha-input"]) button[type="submit"]',
       'form:has(input[data-qa="account-captcha-input"]) button[type="submit"]',
       'form:has(input[name="captchaText"]) button[type="submit"]',
     ],

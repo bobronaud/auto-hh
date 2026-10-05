@@ -1,10 +1,11 @@
 <!-- Captcha dialog from a live dump (data/probe/captcha-submit-*.html, 05.10), trimmed of
      classes. The picture is an inline SVG instead of /captcha/picture; the script stands in
-     for hh: "AB12" closes the dialog, anything else shows the error and a new picture. -->
+     for hh: "AB12" closes the dialog, anything else shows the error and a new picture.
+     There is no <form>: the field sits in the content block and "Отправить" in the footer. -->
 <div role="dialog">
   <h2 data-qa="title">Пройдите капчу</h2>
   <div data-qa="title-description">Чтобы подтвердить, что вы&nbsp;не&nbsp;робот, введите текст с&nbsp;картинки:</div>
-  <form>
+  <div data-qa="modal-content-scroll-container">
     <img data-qa="account-captcha-picture" alt="captcha" width="160" height="50"
       src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='50'%3E%3Ctext x='10' y='35' font-size='30'%3EAB12%3C/text%3E%3C/svg%3E">
     <button aria-label="Другой текст" type="button" data-qa="captcha-renew-text">↻</button>
@@ -14,13 +15,12 @@
       <div aria-hidden="true" id="err-wrap"><div data-qa="account-captcha-error">Неверный текст. Пожалуйста, повторите попытку.</div></div>
     </div></div>
     <input type="hidden" name="isBot" value="false">
-    <button type="submit">Отправить</button>
-  </form>
+  </div>
+  <div data-qa="modal-footer"><button type="submit">Отправить</button></div>
 </div>
 <script>
   window.submits = 0
-  document.querySelector('form').addEventListener('submit', (e) => {
-    e.preventDefault()
+  document.querySelector('[data-qa="modal-footer"] button').addEventListener('click', () => {
     window.submits++
     const v = document.querySelector('input[name="captchaText"]').value
     if (v === 'AB12') document.querySelector('[role="dialog"]').remove()

@@ -4,28 +4,14 @@
     {
       "id": "react",
       "title": "Frontend-разработчик (React, Next.js, TypeScript)",
-      "match": [
-        "react",
-        "next.js",
-        "nextjs",
-        "redux",
-        "mobx",
-        "react native"
-      ],
+      "match": ["react", "next.js", "nextjs", "redux", "mobx", "react native"],
       "exclude": [],
       "file": "resume.react.md"
     },
     {
       "id": "vue",
       "title": "Frontend-разработчик (Vue.js, Nuxt, TypeScript)",
-      "match": [
-        "vue",
-        "vue.js",
-        "vuejs",
-        "nuxt",
-        "vuex",
-        "pinia"
-      ],
+      "match": ["vue", "vue.js", "vuejs", "nuxt", "vuex", "pinia"],
       "exclude": [],
       "file": "resume.vue.md"
     },
@@ -60,14 +46,12 @@
   },
   "search": {
     "text": "frontend OR фронтенд OR react OR vue OR javascript OR typescript OR верстальщик OR fullstack OR фулстек OR node.js OR \"full-stack\" OR \"full stack\" OR \"web-программист\" OR \"web программист\" OR \"веб-программист\" OR \"веб программист\" OR \"vibe-coder\" OR \"vibe coder\" OR вайбкодер OR \"вайб-кодер\" OR \"web-разработчик\" OR \"web разработчик\" OR \"веб-разработчик\" OR \"веб разработчик\" OR \"web developer\" OR \"ui-разработчик\" OR \"ui разработчик\" OR \"ui-developer\" OR \"ui developer\" OR \"ui-программист\" OR \"ui программист\"",
-    "searchField": [
-      "name"
-    ],
+    "searchField": ["name"],
     "area": [],
     "excludedText": [],
     "workFormat": [],
     "period": 30,
-    "maxPages": 40
+    "maxPages": 100
   },
   "filters": {
     "skipWithTest": false,
