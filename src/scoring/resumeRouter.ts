@@ -2,7 +2,7 @@ import type { Config, ResumeConfig } from '../config/schema.js'
 import { countWordHits } from './textMatch.js'
 
 /**
- * Pick which resume answers a vacancy (React vs Vue).
+ * Pick which resume answers a vacancy (React, Vue or Fullstack).
  *
  * Two rules, in this order:
  *

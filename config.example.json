@@ -28,6 +28,29 @@
       ],
       "exclude": [],
       "file": "resume.vue.md"
+    },
+    {
+      "id": "fullstack",
+      "title": "Fullstack-разработчик (React, Node.js, Python)",
+      "match": [
+        "fullstack",
+        "full-stack",
+        "full stack",
+        "фулстек",
+        "фуллстек",
+        "фулстак",
+        "node",
+        "node.js",
+        "nodejs",
+        "nest",
+        "nest.js",
+        "nestjs",
+        "express",
+        "fastapi",
+        "python"
+      ],
+      "exclude": [],
+      "file": "resume.fullstack.md"
     }
   ],
   "routing": {
