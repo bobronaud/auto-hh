@@ -75,6 +75,7 @@ export interface ChatRunResult {
   answered: number
   needsHuman: number
   human: number
+  mailings: number
   finished: number
   failed: number
   stopReason?: string

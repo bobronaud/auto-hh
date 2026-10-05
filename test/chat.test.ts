@@ -120,3 +120,28 @@ test('readThread on the owner\'s finished chat (Т Плюс, 05.10)', async () =
 test('a rejection is not left to the owner', () => {
   assert.deepEqual(chatState([LETTER, { author: 'employer', text: 'К сожалению...', title: 'Отказ' }]), { kind: 'other' })
 })
+
+import { interpretVerdict, classifyEmployerMessage } from '../src/chat/employer.js'
+import type { Config } from '../src/config/schema.js'
+
+test('employer verdict: mailing, recruiter, and doubt goes to the owner', () => {
+  assert.deepEqual(interpretVerdict('###РАССЫЛКА### позиция закрыта'), { auto: true, reason: 'позиция закрыта' })
+  assert.deepEqual(interpretVerdict('###РЕКРУТЕР### просит написать в телеграм'), {
+    auto: false,
+    reason: 'просит написать в телеграм',
+  })
+  assert.equal(interpretVerdict('###РАССЫЛКА### или ###РЕКРУТЕР###').auto, false)
+  assert.equal(interpretVerdict('не знаю').auto, false)
+})
+
+test('employer verdict: a failing model keeps the message for the owner', async () => {
+  const broken = { name: 'x', model: 'x', complete: () => Promise.reject(new Error('logged out')) }
+  const v = await classifyEmployerMessage('Напишите мне в телеграм @hr', {} as Config, broken)
+  assert.equal(v.auto, false)
+  assert.match(v.reason, /logged out/)
+})
+
+test('several employer bubbles in a row reach the classifier together', () => {
+  const s = chatState([LETTER, { author: 'employer', text: 'Здравствуйте!' }, { author: 'employer', text: 'Напишите в телеграм @hr' }])
+  assert.deepEqual(s, { kind: 'human', last: 'Здравствуйте!\n\nНапишите в телеграм @hr' })
+})

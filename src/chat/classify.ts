@@ -23,7 +23,10 @@ export type ChatState =
   | { kind: 'awaiting' }
   /** The assistant summed up or left. */
   | { kind: 'finished' }
-  /** A live recruiter spoke last. */
+  /**
+   * The employer spoke last, not the assistant. Whether that is a live recruiter or a
+   * mass mailing is not decided here — see employer.ts.
+   */
   | { kind: 'human'; last: string }
   /** Nobody but us: just the cover letter, a chat without the assistant. */
   | { kind: 'other' }
@@ -32,6 +35,7 @@ export type ChatState =
 // it, then the system line about leaving; a pass can land between any two of them.
 const LEFT = /покинул[аи]?\s+чат/iu
 const CLOSING = /в\s+разговоре\s+с\s+кандидатом\s+я\s+узнал|благодарю\s+за\s+ответы/iu
+
 
 export function chatState(messages: readonly ChatMessage[]): ChatState {
   const spoken = messages.filter((m) => m.author !== 'system')
@@ -46,7 +50,11 @@ export function chatState(messages: readonly ChatMessage[]): ChatState {
   if (last.author === 'employer') {
     // A rejection asks nothing of anyone; the owner does not need it in his queue.
     if (/отказ/iu.test(last.title ?? '')) return { kind: 'other' }
-    return { kind: 'human', last: last.text }
+    // Everything the employer said since we last spoke: a greeting bubble and the
+    // request itself often come as two.
+    const tail: string[] = []
+    for (let i = spoken.length - 1; i >= 0 && spoken[i]!.author === 'employer'; i--) tail.unshift(spoken[i]!.text)
+    return { kind: 'human', last: tail.join('\n\n').trim() }
   }
 
   // The assistant spoke last. Did it leave after that, or was it the closing turn?

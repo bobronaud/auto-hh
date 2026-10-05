@@ -2,6 +2,7 @@ import { openContext, getPage, HumanNeededError, randomBetween, screenshot } fro
 import { listChats, readChat, sendReply, type ChatSummary } from '../hh/chat.js'
 import { chatState } from '../chat/classify.js'
 import { answerChat } from '../chat/generate.js'
+import { classifyEmployerMessage } from '../chat/employer.js'
 import { routeResume } from '../scoring/resumeRouter.js'
 import { salaryAnswer } from '../answers/salary.js'
 import { Repo } from '../db/repo.js'
@@ -23,6 +24,8 @@ export interface ChatRunResult {
   answered: number
   needsHuman: number
   human: number
+  /** Employer messages the model read as a mass mailing — not shown to the owner. */
+  mailings: number
   finished: number
   failed: number
   stopReason?: string
@@ -39,7 +42,7 @@ export interface ChatRunResult {
  */
 export async function runChats(cfg: Config): Promise<ChatRunResult> {
   const repo = new Repo()
-  const result: ChatRunResult = { passes: 0, chats: 0, answered: 0, needsHuman: 0, human: 0, finished: 0, failed: 0 }
+  const result: ChatRunResult = { passes: 0, chats: 0, answered: 0, needsHuman: 0, human: 0, mailings: 0, finished: 0, failed: 0 }
   // chat id → idle passes so far, for chats where we spoke last.
   const awaiting = new Map<string, number>()
   // Chats settled this run: finished, parked or human — never reopened.
@@ -97,9 +100,16 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
 
         if (state.kind === 'human') {
           done.add(id)
-          repo.recordChatReply({ chatId: id, title, company, question: state.last, status: 'human' })
+          if (repo.chatQuestionHandled(id, state.last)) continue
+          const verdict = await classifyEmployerMessage(state.last, cfg)
+          if (verdict.auto) {
+            result.mailings++
+            log.info(`   ${tag}: рассылка работодателя — ${verdict.reason || 'отвечать нечего'}`)
+            continue
+          }
+          repo.recordChatReply({ chatId: id, title, company, question: state.last, status: 'human', reason: verdict.reason })
           result.human++
-          log.info(`   ${tag}: пишет рекрутер — оставлено вам`)
+          log.info(`   ${tag}: пишет рекрутер — оставлено вам (${verdict.reason})`)
           continue
         }
 

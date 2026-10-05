@@ -259,6 +259,7 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
         ['чатов', r.chats],
         ['отвечено', r.answered, 'ok'],
         ['оставлено вам', r.needsHuman + r.human, 'warn'],
+        ['рассылки и отказы', r.mailings ?? 0],
         ['помощник закончил', r.finished],
         ['не отправилось', r.failed, 'danger'],
         ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),

@@ -55,7 +55,7 @@ export async function listChats(page: Page, cfg: Config, opts: { unreadOnly: boo
     (els, [titleSel, companySel]) =>
       els.map((el) => ({
         id: (el.getAttribute('data-qa') ?? '').replace(/^chatik-open-chat-/, ''),
-        title: el.querySelector(titleSel!)?.textContent?.trim() || null,
+        title: el.querySelector(titleSel!)?.textContent?.replace(/^\s*в архиве\s*/u, '').trim() || null,
         company: el.querySelector(companySel!)?.textContent?.trim() || null,
       })),
     [any(S.listTitle), any(S.listCompany)],
@@ -127,7 +127,7 @@ export async function readThread(page: Page): Promise<ChatView> {
   const href = await page.locator(any(S.vacancyLink)).first().getAttribute('href', { timeout: 1000 }).catch(() => null)
   return {
     messages,
-    title: header?.replace(/^\s*Вакансия\s*/u, '').replace(/\s*Перейти\s*$/u, '').trim() || null,
+    title: header?.replace(/^\s*Вакансия\s*/u, '').replace(/^в архиве\s*/u, '').replace(/\s*Перейти\s*$/u, '').trim() || null,
     company: await textOf(page, S.headerTitle),
     vacancyHhId: href?.match(/\/vacancy\/(\d+)/)?.[1] ?? null,
   }
