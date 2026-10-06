@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { interpretAnswers, parseBlocks, describeAnswer } from '../src/answers/generate.js'
+import { interpretAnswers, parseBlocks, describeAnswer, textProblem } from '../src/answers/generate.js'
 import type { FormQuestion } from '../src/answers/types.js'
 
 const text: FormQuestion = { index: 1, text: 'Опыт с Vue?', kind: 'text', field: 'task_1_text', options: [], openField: null }
@@ -69,4 +69,9 @@ test('any problem fails the whole form, with the question named', () => {
     assert.equal(r.ok, false, reply)
     if (!r.ok) assert.match(r.reason, re)
   }
+})
+
+test('textProblem catches a word mixing Cyrillic and Latin (06.10)', () => {
+  assert.match(textProblem('Результат проверяю сам: читаю диff, гоняю тесты.') ?? '', /кириллица и латиница/)
+  assert.equal(textProblem('Опыт JS-разработчика на Vue 3 и TypeScript, ревью диффов.'), null)
 })

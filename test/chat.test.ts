@@ -92,6 +92,16 @@ before(async () => {
 })
 after(async () => browser.close())
 
+test('readThread treats «Робот-рекрутер» as a bot, like «ИИ-помощник» (Дао АйТи, 06.10)', async () => {
+  const html = readFileSync(new URL('./fixtures/chat-open.html', import.meta.url), 'utf8')
+    .replace(/<span data-qa="chat-bubble-author-name"><span>ИИ-помощник</g, '<span data-qa="chat-bubble-author-name"><span>Робот-рекрутер<')
+  assert.ok(!/author-name"><span>ИИ-помощник/.test(html))
+  await page.setContent(html)
+  const v = await readThread(page)
+  assert.equal(v.messages[2]!.author, 'assistant')
+  assert.equal(chatState(v.messages.slice(0, 4)).kind, 'question')
+})
+
 test('readThread on the owner\'s finished chat (Т Плюс, 05.10)', async () => {
   await page.setContent(readFileSync(new URL('./fixtures/chat-open.html', import.meta.url), 'utf8'))
   const v = await readThread(page)

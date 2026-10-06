@@ -871,9 +871,39 @@ export class Repo {
       .get(chatId, question)
   }
 
+  /**
+   * The bot's question has been dealt with: answered, or parked as `needs_human`.
+   * Unlike `chatQuestionHandled`, a `human` row does not count — that is the same text
+   * read as a live recruiter, before «Робот-рекрутер» was known as a bot (06.10).
+   */
+  chatQuestionAnswered(chatId: string, question: string): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM chat_replies
+         WHERE chat_id = ? AND question = ? AND status IN ('sent', 'needs_human')`,
+      )
+      .get(chatId, question)
+  }
+
+  /** Chats left to the owner as a live recruiter and not yet resolved. */
+  chatsLeftToOwner(): string[] {
+    return (
+      this.db
+        .prepare(`SELECT DISTINCT chat_id FROM chat_replies WHERE status = 'human' AND resolved_at IS NULL`)
+        .all() as { chat_id: string }[]
+    ).map((r) => r.chat_id)
+  }
+
+  /** The bot turned out to be the one talking: the owner's `human` rows for the chat are moot. */
+  resolveChatHumanRows(chatId: string): void {
+    this.db
+      .prepare(`UPDATE chat_replies SET resolved_at = ? WHERE chat_id = ? AND status = 'human' AND resolved_at IS NULL`)
+      .run(now(), chatId)
+  }
+
   chatReplies(opts: { includeResolved?: boolean; limit?: number } = {}): ChatReplyRow[] {
-    // Sent replies need no resolving, so "resolved" only hides the owner's rows.
-    const where = opts.includeResolved ? '' : `WHERE status = 'sent' OR resolved_at IS NULL`
+    // Sent replies are resolved too, once the owner has read them (06.10).
+    const where = opts.includeResolved ? '' : `WHERE resolved_at IS NULL`
     return this.db
       .prepare(`SELECT * FROM chat_replies ${where} ORDER BY created_at DESC, id DESC LIMIT ?`)
       .all(opts.limit ?? 300) as ChatReplyRow[]

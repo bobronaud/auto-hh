@@ -88,6 +88,12 @@ export async function readChat(page: Page, cfg: Config, id: string): Promise<Cha
   return readThread(page)
 }
 
+/**
+ * hh's question bots, answered alike (owner, 06.10): «ИИ-помощник» and «Робот-рекрутер».
+ * The hyphen may come as any dash.
+ */
+const BOT_AUTHOR = /ии[\s\p{Pd}]*помощник|робот[\s\p{Pd}]*рекрутер/iu
+
 /** Parse the open chat. Separate from navigation so fixtures can test it. */
 export async function readThread(page: Page): Promise<ChatView> {
   const raw = await page.locator(any(S.message)).evaluateAll(
@@ -118,7 +124,7 @@ export async function readThread(page: Page): Promise<ChatView> {
       lastForeign = null
     } else {
       if (m.author) lastForeign = m.author
-      author = lastForeign && /ии-помощник/iu.test(lastForeign) ? 'assistant' : 'employer'
+      author = lastForeign && BOT_AUTHOR.test(lastForeign) ? 'assistant' : 'employer'
     }
     messages.push({ author, text: m.text, title: m.title })
   }
@@ -157,14 +163,10 @@ export async function sendReply(page: Page, cfg: Config, text: string): Promise<
     return fail(page, `поле сообщения не найдено: ${(e as Error).message.split('\n')[0]}`)
   }
 
-  const send = page.locator(any(S.send)).first()
-  if ((await send.count()) > 0 && (await send.isVisible())) {
-    log.debug('send: button')
-    await send.click()
-  } else {
-    log.debug('send: Enter')
-    await input.press('Enter')
-  }
+  // Enter, not the send button: hh labels the button itself «Enter — отправить
+  // сообщение», and the cookie banner at the bottom of the page sits over the button,
+  // so a click hangs for 30 s and takes the whole run down (06.10).
+  await input.press('Enter')
 
   if (await waitForOwn(page, before, line)) return { ok: true }
   // A captcha can come up on send, as it does on the application modal.

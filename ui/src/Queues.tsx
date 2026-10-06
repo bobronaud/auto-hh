@@ -625,7 +625,7 @@ export function Chats({ version, onChange }: { version: number; onChange: () => 
   return (
     <>
       <p className="dim">
-        Ответы ИИ-помощнику hh и чаты, оставленные вам: живой рекрутер или вопрос, на который бот
+        Ответы ботам hh (ИИ-помощник, робот-рекрутер) и чаты, оставленные вам: живой рекрутер или вопрос, на который бот
         не смог ответить. Бот их уже открыл, на hh они прочитанные.{' '}
         <label style={{ marginLeft: 8 }}>
           <input
@@ -643,8 +643,7 @@ export function Chats({ version, onChange }: { version: number; onChange: () => 
           <thead>
             <tr>
               <th>вакансия</th>
-              <th>вопрос</th>
-              <th>ответ</th>
+              <th className="nowrap">вопрос/ответ</th>
               <th>статус</th>
               <th className="num">когда</th>
               <th />
@@ -661,8 +660,9 @@ export function Chats({ version, onChange }: { version: number; onChange: () => 
                     </a>
                     {r.company && <div className="dim">{r.company}</div>}
                   </td>
-                  <td className="pre-wrap">{r.question}</td>
-                  <td className="pre-wrap">{r.answer ?? <span className="dim">—</span>}</td>
+                  <td>
+                    <ChatQaCell row={r} />
+                  </td>
                   <td>
                     <span className={cls}>{label}</span>
                     {r.reason && <div className="dim mono">{r.reason}</div>}
@@ -670,7 +670,7 @@ export function Chats({ version, onChange }: { version: number; onChange: () => 
                   </td>
                   <td className="num dim nowrap">{dateTime(r.created_at)}</td>
                   <td className="nowrap">
-                    {r.status === 'sent' ? null : r.resolved_at ? (
+                    {r.resolved_at ? (
                       <span className="dim">разобрано {dateTime(r.resolved_at)}</span>
                     ) : (
                       <button className="small" disabled={busy === r.id} onClick={() => void resolve(r.id)}>
@@ -683,6 +683,46 @@ export function Chats({ version, onChange }: { version: number; onChange: () => 
             })}
           </tbody>
         </table>
+      )}
+    </>
+  )
+}
+
+/**
+ * The question and the answer behind one button: in table cells they made every row
+ * as tall as the longest message.
+ */
+function ChatQaCell({ row }: { row: ChatReplyRow }) {
+  const [open, setOpen] = useState(false)
+  if (!row.question && !row.answer) return <span className="dim">—</span>
+
+  return (
+    <>
+      <button type="button" className="small" onClick={() => setOpen(true)}>
+        открыть
+      </button>
+      {open && (
+        <Modal
+          wide
+          title={row.title ?? `чат ${row.chat_id}`}
+          subtitle={row.company ?? undefined}
+          onClose={() => setOpen(false)}
+        >
+          <div className="qa-split">
+            <section>
+              <h4>вопрос</h4>
+              <p className="letter-view">{row.question || <span className="dim">—</span>}</p>
+            </section>
+            <section>
+              <h4>ответ</h4>
+              {row.answer ? (
+                <p className="letter-view">{row.answer}</p>
+              ) : (
+                <p className="dim">не отправлялся</p>
+              )}
+            </section>
+          </div>
+        </Modal>
       )}
     </>
   )

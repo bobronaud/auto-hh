@@ -91,17 +91,20 @@ export function Modal({
   subtitle,
   children,
   onClose,
+  wide = false,
 }: {
   title: string
   subtitle?: React.ReactNode
   children: React.ReactNode
   onClose: () => void
+  /** Room for two columns side by side. */
+  wide?: boolean
 }) {
   useDismiss(onClose)
 
   return (
     <div className="modal" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className={wide ? 'modal-card wide' : 'modal-card'} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <strong>{title}</strong>

@@ -49,6 +49,10 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
   const done = new Set<string>()
   const seen = new Set<string>()
   const known = new Map<string, ChatSummary>()
+  // Chats sitting with the owner as "a recruiter writes": read once more, since some
+  // were a bot all along («Робот-рекрутер» before 06.10). Already read, so the unread
+  // list alone would never bring them back.
+  const revisit = new Set(repo.chatsLeftToOwner())
 
   const ctx = await openContext(cfg)
   try {
@@ -57,7 +61,8 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
     while (result.passes < MAX_PASSES) {
       const unread = (await listChats(page, cfg, { unreadOnly: true })).filter((c) => !done.has(c.id))
       for (const c of unread) known.set(c.id, c)
-      const ids = [...new Set([...unread.map((c) => c.id), ...awaiting.keys()])]
+      const ids = [...new Set([...unread.map((c) => c.id), ...awaiting.keys(), ...revisit])]
+      revisit.clear()
       if (ids.length === 0) break
 
       result.passes++
@@ -75,7 +80,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
         const state = chatState(chat.messages)
         const tag = `${(title ?? id).slice(0, 50)}${company ? ` · ${company}` : ''}`
 
-        if (state.kind === 'awaiting' || (state.kind === 'question' && repo.chatQuestionHandled(id, state.question))) {
+        if (state.kind === 'awaiting' || (state.kind === 'question' && repo.chatQuestionAnswered(id, state.question))) {
           const idle = (awaiting.get(id) ?? -1) + 1
           if (idle >= MAX_IDLE_PASSES) {
             awaiting.delete(id)
@@ -142,6 +147,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
         if (reply.kind === 'unanswered') {
           done.add(id)
           repo.recordChatReply({ ...base, status: 'needs_human', reason: reply.reason })
+          repo.resolveChatHumanRows(id)
           result.needsHuman++
           log.warn(`   оставлено вам: ${reply.reason}`)
           continue
@@ -150,6 +156,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
         const sent = await sendReply(page, cfg, reply.text)
         if (sent.ok) {
           repo.recordChatReply({ ...base, answer: reply.text, status: 'sent' })
+          repo.resolveChatHumanRows(id)
           result.answered++
           awaiting.set(id, 0)
           log.info(`   ответ: «${reply.text}»`)
@@ -159,6 +166,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
           done.add(id)
           const shot = sent.screenshot ?? (await screenshot(page, `chat-${id}`))
           repo.recordChatReply({ ...base, answer: reply.text, status: 'failed', reason: sent.reason, screenshotPath: shot })
+          repo.resolveChatHumanRows(id)
           result.failed++
           log.warn(`   отправка не подтвердилась: ${sent.reason}`)
         }

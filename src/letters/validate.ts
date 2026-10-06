@@ -20,6 +20,7 @@ export type LetterProblem =
   | 'typography'
   | 'self_deprecating'
   | 'signature'
+  | 'mixed_script'
 
 export const PROBLEM_LABEL: Record<LetterProblem, string> = {
   too_long: 'длиннее допустимого',
@@ -29,6 +30,7 @@ export const PROBLEM_LABEL: Record<LetterProblem, string> = {
   placeholder: 'содержит незаполненный плейсхолдер',
   meta_commentary: 'содержит служебный текст модели',
   typography: 'символы, которых нет на клавиатуре (длинное тире и подобные)',
+  mixed_script: 'кириллица и латиница в одном слове',
   self_deprecating: 'признаётся, что чего-то не знает или не делал',
   signature: 'подписано именем или контактами',
 }
@@ -95,6 +97,13 @@ export const META =
  */
 export const MARKDOWN = /(\*\*|^#{1,6}\s|^[-*]\s+\p{L}|```)/mu
 
+/**
+ * A word that switches between Cyrillic and Latin mid-way: «диff» went out in a chat
+ * reply on 06.10. No person types that. Hyphenated terms («JS-разработчик») are two
+ * words and pass.
+ */
+export const MIXED_SCRIPT = /\p{Script=Cyrillic}\p{Script=Latin}|\p{Script=Latin}\p{Script=Cyrillic}/u
+
 export function validateLetter(text: string, cfg: Config): Validation {
   const problems: LetterProblem[] = []
   const matched: Partial<Record<LetterProblem, string>> = {}
@@ -119,6 +128,7 @@ export function validateLetter(text: string, cfg: Config): Validation {
   hit('placeholder', PLACEHOLDER)
   hit('meta_commentary', META)
   hit('typography', TYPOGRAPHY)
+  hit('mixed_script', MIXED_SCRIPT)
   hit('self_deprecating', SELF_DEPRECATING)
   hit('signature', SIGN_OFF, CONTACTS)
 

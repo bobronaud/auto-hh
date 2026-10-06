@@ -396,12 +396,6 @@ export const selectors = {
     headerVacancy: ['[data-qa="chatik-header-sub-header"]'],
     vacancyLink: ['a[data-qa="chatik-header-vacancy-link"]'],
     input: ['[data-qa="chatik-message-input"] textarea', 'textarea[data-qa="text-input"]'],
-    send: [
-      '[data-qa="chatik-message-input"] button[aria-label*="Отправить"]',
-      '[data-qa="chatik-do-send-message"]',
-      '[data-qa="chat-input-send"]',
-      '[data-qa="chatik-message-input"] [data-qa*="send"]',
-    ],
   },
 } as const
 

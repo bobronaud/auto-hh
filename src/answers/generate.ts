@@ -1,6 +1,6 @@
 import { createProvider, type LlmProvider } from '../llm/provider.js'
 import { readResumeText } from '../letters/generate.js'
-import { tidyLetter, TYPOGRAPHY, SELF_DEPRECATING, MARKDOWN, META } from '../letters/validate.js'
+import { tidyLetter, TYPOGRAPHY, MIXED_SCRIPT, SELF_DEPRECATING, MARKDOWN, META } from '../letters/validate.js'
 import { systemPrompt, formPrompt, type FormPromptInput } from './prompt.js'
 import { ANSWER_MAX_CHARS, OPEN_OPTION_VALUE, type FormAnswer, type FormQuestion } from './types.js'
 import { logger } from '../core/logger.js'
@@ -98,6 +98,7 @@ export function textProblem(text: string): string | null {
   if (text.length > ANSWER_MAX_CHARS) return `ответ длиннее ${ANSWER_MAX_CHARS} символов (${text.length})`
   for (const [re, label] of [
     [TYPOGRAPHY, 'символы, которых нет на клавиатуре'],
+    [MIXED_SCRIPT, 'кириллица и латиница в одном слове'],
     [SELF_DEPRECATING, 'признаётся, что чего-то не знает или не делал'],
     [MARKDOWN, 'markdown-разметка'],
     [META, 'служебный текст модели'],

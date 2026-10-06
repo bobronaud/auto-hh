@@ -351,6 +351,48 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   line-height: 1;
   color: var(--muted);
 }
+.modal-card.wide {
+  width: min(1100px, 100%);
+}
+/* Chat question and our answer side by side; stacked on a narrow screen. */
+.qa-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.qa-split > section {
+  padding: 0 16px;
+  min-width: 0;
+}
+.qa-split > section:first-child {
+  padding-left: 0;
+  border-right: 1px solid var(--line);
+}
+.qa-split > section:last-child {
+  padding-right: 0;
+}
+.qa-split h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .qa-split {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .qa-split > section {
+    padding: 0;
+  }
+  .qa-split > section:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px;
+  }
+}
 /* The letter is the point of the box, so it gets the scroll and the head stays put. */
 .modal-body {
   padding: 16px;
