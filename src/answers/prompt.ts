@@ -1,4 +1,3 @@
-import { PROFILE_FACTS } from './profile.js'
 import { ANSWER_MAX_CHARS, type FormQuestion } from './types.js'
 import type { Config, ResumeConfig } from '../config/schema.js'
 
@@ -70,7 +69,7 @@ export function formPrompt(input: FormPromptInput, cfg: Config): string {
     ...(extra ? ['', 'Дополнительно, сверх резюме:', extra] : []),
     '',
     'Анкета кандидата:',
-    ...PROFILE_FACTS.map((f) => `- ${f}`),
+    ...cfg.profile.facts.map((f) => `- ${f}`),
     `- Желаемая зарплата для этой вакансии: ${input.salary}. На любой вопрос о зарплате,`,
     '  доходе или ожиданиях отвечай этой суммой.',
     '',

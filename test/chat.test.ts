@@ -3,15 +3,15 @@ import assert from 'node:assert/strict'
 import { chatState, type ChatMessage } from '../src/chat/classify.js'
 import { interpretReply } from '../src/chat/generate.js'
 
-// The owner's example chat (05.10), cut down.
-const LETTER: ChatMessage = { author: 'me', text: 'Здравствуйте! Личный кабинет, которым каждый день пользуются клиенты...' }
+// A finished assistant chat (structure from a live dump 05.10, text replaced), cut down.
+const LETTER: ChatMessage = { author: 'me', text: 'Здравствуйте! Личный кабинет из вашей вакансии...' }
 const JOINED: ChatMessage = { author: 'system', text: 'Пользователь ИИ-помощник присоединился к чату' }
 const GREETING: ChatMessage = {
   author: 'assistant',
-  text: 'Здравствуйте, Александр! Я ИИ-помощник hh. Спасибо за отклик на вакансию! ...',
+  text: 'Здравствуйте, Иван! Я ИИ-помощник hh. Спасибо за отклик на вакансию! ...',
 }
 const Q1: ChatMessage = { author: 'assistant', text: 'Расскажите, пожалуйста, есть ли у вас опыт разработки на бэкенде?' }
-const A1: ChatMessage = { author: 'me', text: 'Да, есть. На текущем месте закрывал смежные backend-задачи на Node.js.' }
+const A1: ChatMessage = { author: 'me', text: 'Да, есть. Писал REST эндпоинты на Node.js.' }
 const Q2: ChatMessage = { author: 'assistant', text: 'Спасибо за подробный ответ. Скажите, работали ли вы с PHP и фреймворком Laravel?' }
 const SUMMARY: ChatMessage = {
   author: 'assistant',
@@ -92,7 +92,7 @@ before(async () => {
 })
 after(async () => browser.close())
 
-test('readThread treats «Робот-рекрутер» as a bot, like «ИИ-помощник» (Дао АйТи, 06.10)', async () => {
+test('readThread treats «Робот-рекрутер» as a bot, like «ИИ-помощник» (06.10)', async () => {
   const html = readFileSync(new URL('./fixtures/chat-open.html', import.meta.url), 'utf8')
     .replace(/<span data-qa="chat-bubble-author-name"><span>ИИ-помощник</g, '<span data-qa="chat-bubble-author-name"><span>Робот-рекрутер<')
   assert.ok(!/author-name"><span>ИИ-помощник/.test(html))
@@ -102,13 +102,13 @@ test('readThread treats «Робот-рекрутер» as a bot, like «ИИ-п
   assert.equal(chatState(v.messages.slice(0, 4)).kind, 'question')
 })
 
-test('readThread on the owner\'s finished chat (Т Плюс, 05.10)', async () => {
+test('readThread on a finished assistant chat (05.10)', async () => {
   await page.setContent(readFileSync(new URL('./fixtures/chat-open.html', import.meta.url), 'utf8'))
   const v = await readThread(page)
 
   assert.equal(v.title, 'FullStack-разработчик')
-  assert.equal(v.company, 'Т Плюс')
-  assert.equal(v.vacancyHhId, '137316685')
+  assert.equal(v.company, 'ООО Пример')
+  assert.equal(v.vacancyHhId, '100000001')
   assert.deepEqual(
     v.messages.map((m) => m.author),
     ['me', 'system', 'assistant', 'assistant', 'me', 'assistant', 'me', 'assistant', 'me', 'assistant', 'me',

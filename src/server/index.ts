@@ -18,12 +18,40 @@ const HOST = '127.0.0.1'
 const PORT = Number(process.env.PORT ?? 3000)
 /** Vite dev server; the built UI is served same-origin and needs no entry here. */
 const UI_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
+/** Vite proxies with changeOrigin, so its requests arrive as 127.0.0.1:PORT too. */
+const ALLOWED_HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`]
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
 
 async function main(): Promise<void> {
   getDb()
 
   const app = Fastify({ logger: false })
   await app.register(cors, { origin: UI_ORIGINS })
+
+  /**
+   * CORS alone does not protect this server: it only stops a foreign page from
+   * reading the response, the request itself still runs. Any site open in the
+   * owner's browser could fire a body-less `fetch(..., { method: 'POST', mode:
+   * 'no-cors' })` at /api/run/apply and send real applications.
+   *
+   * - Host: a DNS-rebound domain resolves to 127.0.0.1 but keeps its own name in
+   *   Host, and would otherwise become same-origin with this API and read it all.
+   * - POSTs must be application/json, which a browser never sends cross-origin
+   *   without a preflight, and the preflight is refused for foreign origins.
+   */
+  app.addHook('onRequest', async (req, reply) => {
+    if (!ALLOWED_HOSTS.includes(req.headers.host ?? '')) {
+      return reply.code(403).send({ error: 'forbidden host' })
+    }
+    if (SAFE_METHODS.includes(req.method)) return
+    const origin = req.headers.origin
+    if (origin !== undefined && !UI_ORIGINS.includes(origin)) {
+      return reply.code(403).send({ error: 'forbidden origin' })
+    }
+    if (!req.headers['content-type']?.startsWith('application/json')) {
+      return reply.code(415).send({ error: 'application/json required' })
+    }
+  })
   await registerRoutes(app)
 
   await app.listen({ host: HOST, port: PORT })

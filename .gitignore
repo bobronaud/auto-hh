@@ -6,3 +6,6 @@ resume/
 .env
 *.log
 dist/
+*.sqlite*
+*.local.*
+.claude/settings.local.json

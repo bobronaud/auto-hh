@@ -1,15 +1,16 @@
 /**
  * The salary answer for an employer's question form — the owner's rules, applied in
- * order:
+ * order. The figures are `profile.salary` in config.json (personal data, not in git);
+ * only the choice of level lives here:
  *
  *   1. the posting names a range → its upper bound (only "от X" → X);
  *   2. "middle" and "senior" both in the title ("Middle/Senior", "Middle+/Senior")
- *      → 150-200k; "senior" alone → 200 000;
- *   3. "junior" in the title without "middle", or no experience required → 100-150k;
- *   4. 1-3 years → 150 000;
- *   5. 3-6 years → 150-200k;
- *   6. more than 6 years → 200 000 (not named by the owner; treated as senior);
- *   7. nothing known → 150 000.
+ *      → middleSenior; "senior" alone → senior;
+ *   3. "junior" in the title without "middle", or no experience required → junior;
+ *   4. 1-3 years → middle;
+ *   5. 3-6 years → middleSenior;
+ *   6. more than 6 years → senior (not named by the owner; treated as senior);
+ *   7. nothing known → middle.
  *
  * Only for forms. Letters still never mention money — the owner turned that off, and
  * this rule set is an answer to a direct question, not something volunteered.
@@ -17,6 +18,8 @@
  * Deterministic on purpose: a number is a commitment, and leaving it to the model
  * means a different figure every run for the same posting.
  */
+
+import type { SalaryLevels } from '../config/schema.js'
 
 export interface SalaryInput {
   title: string
@@ -50,20 +53,30 @@ const SENIOR = word('(?:senior|сеньор|синьор)')
 const JUNIOR = word('(?:junior|джуниор|джун)')
 const MIDDLE = word('(?:middle|мидл)')
 
-export function salaryAnswer(v: SalaryInput): string {
+export function salaryAnswer(v: SalaryInput, levels: SalaryLevels): string {
   const top = v.salaryTo ?? v.salaryFrom
   if (top) return `${formatAmount(top)} ${currencyLabel(v.currency)}`
 
-  const band = experienceBand(v.experience)
-  if (SENIOR.test(v.title)) return MIDDLE.test(v.title) ? '150 000 - 200 000 руб' : '200 000 руб'
-  if ((JUNIOR.test(v.title) && !MIDDLE.test(v.title)) || band === 'none') return '100 000 - 150 000 руб'
-  if (band === '1-3') return '150 000 руб'
-  if (band === '3-6') return '150 000 - 200 000 руб'
-  if (band === '6+') return '200 000 руб'
-  return '150 000 руб'
+  return formatLevel(levels[salaryLevel(v)])
 }
 
-/** 200000 → "200 000" with a plain space: a thin space is a typed-by-machine tell. */
+function salaryLevel(v: SalaryInput): keyof SalaryLevels {
+  const band = experienceBand(v.experience)
+  if (SENIOR.test(v.title)) return MIDDLE.test(v.title) ? 'middleSenior' : 'senior'
+  if ((JUNIOR.test(v.title) && !MIDDLE.test(v.title)) || band === 'none') return 'junior'
+  if (band === '1-3') return 'middle'
+  if (band === '3-6') return 'middleSenior'
+  if (band === '6+') return 'senior'
+  return 'middle'
+}
+
+/** 120000 → "120 000 руб", [90000, 120000] → "90 000 - 120 000 руб". */
+function formatLevel(level: SalaryLevels[keyof SalaryLevels]): string {
+  const text = typeof level === 'number' ? formatAmount(level) : level.map(formatAmount).join(' - ')
+  return `${text} руб`
+}
+
+/** 120000 → "120 000" with a plain space: a thin space is a typed-by-machine tell. */
 export function formatAmount(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 }

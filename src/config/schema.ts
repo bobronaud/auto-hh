@@ -189,6 +189,35 @@ const browserSchema = z.object({
   slowMoMs: z.number().int().min(0).default(0),
 })
 
+/** One salary figure, or a range written as "от - до". */
+const salaryLevelSchema = z.union([
+  z.number().int().positive(),
+  z.tuple([z.number().int().positive(), z.number().int().positive()]),
+])
+
+/**
+ * The owner's personal answers: the questionnaire part of employer forms and chats,
+ * and the salary asked for when the posting names none.
+ *
+ * Lives in config.json, which is not in git, rather than in code: the repository is
+ * public and these are personal data (owner, 07.10). Which level a vacancy gets is
+ * decided in answers/salary.ts; only the figures are here.
+ */
+const profileSchema = z.object({
+  /** One fact per line, fed verbatim to the model: name, city, contacts, education… */
+  facts: z.array(z.string().min(1)).default([]),
+  salary: z.object({
+    /** "junior" without "middle" in the title, or no experience required. */
+    junior: salaryLevelSchema,
+    /** 1-3 years, and the default when nothing is known. */
+    middle: salaryLevelSchema,
+    /** "Middle/Senior" in the title, or 3-6 years. */
+    middleSenior: salaryLevelSchema,
+    /** "senior" without "middle" in the title, or more than 6 years. */
+    senior: salaryLevelSchema,
+  }),
+})
+
 /**
  * One resume per stack. hh's apply modal has a resume dropdown, so the same run can
  * answer a React vacancy with the React resume and a Vue one with the Vue resume —
@@ -237,6 +266,7 @@ export const configSchema = z.object({
   limits: limitsSchema.default({}),
   scoring: scoringSchema.default({}),
   letter: letterSchema.default({}),
+  profile: profileSchema,
   llm: llmSchema.default({}),
   browser: browserSchema.default({}),
 })
@@ -256,6 +286,7 @@ export const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>
 export type ResumeConfig = z.infer<typeof resumeSchema>
+export type SalaryLevels = z.infer<typeof profileSchema>['salary']
 export type RoutingConfig = z.infer<typeof routingSchema>
 export type SearchConfig = z.infer<typeof searchSchema>
 export type LimitsConfig = z.infer<typeof limitsSchema>

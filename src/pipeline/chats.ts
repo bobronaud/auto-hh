@@ -131,7 +131,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
               salaryTo: vacancy?.salary_to ?? null,
               currency: vacancy?.salary_currency ?? null,
               experience: null,
-            }),
+            }, cfg.profile.salary),
             resume: route.resume,
             messages: chat.messages,
           },

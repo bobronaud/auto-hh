@@ -60,12 +60,12 @@ test('fillForm puts answers in and reads them back', async () => {
   assert.ok(r.ok)
   const [t1, rad, t2] = r.questions as [typeof r.questions[0], typeof r.questions[0], typeof r.questions[0]]
   const answers = new Map<number, FormAnswer>([
-    [t1.index, { kind: 'text', text: '150 000 руб' }],
+    [t1.index, { kind: 'text', text: '160 000 руб' }],
     [rad.index, { kind: 'choice', values: [rad.options[0]!.value], text: null }],
     [t2.index, { kind: 'text', text: 'Да, соответствует. Живу в Москве.' }],
   ])
   await fillForm(page, r.questions, answers)
-  assert.equal(await page.locator(`textarea[name="${t1.field}"]`).inputValue(), '150 000 руб')
+  assert.equal(await page.locator(`textarea[name="${t1.field}"]`).inputValue(), '160 000 руб')
   assert.ok(await page.locator(`input[name="${rad.field}"][value="${rad.options[0]!.value}"]`).isChecked())
 })
 

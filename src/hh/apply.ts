@@ -328,7 +328,7 @@ async function applyWithQuestions(
     salaryTo: facts.salary.to,
     currency: facts.salary.currency,
     experience: facts.experience,
-  })
+  }, cfg.profile.salary)
   log.info(`   форма: ${questions.length} вопросов · опыт «${facts.experience ?? '?'}» · зарплата ${salary}`)
 
   const result = await answerForm(

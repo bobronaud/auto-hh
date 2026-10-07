@@ -1,4 +1,3 @@
-import { PROFILE_FACTS } from '../answers/profile.js'
 import { ANSWER_MAX_CHARS } from '../answers/types.js'
 import type { Config, ResumeConfig } from '../config/schema.js'
 import type { ChatMessage } from './classify.js'
@@ -67,7 +66,7 @@ export function chatPrompt(input: ChatPromptInput, cfg: Config): string {
     ...(extra ? ['', 'Дополнительно, сверх резюме:', extra] : []),
     '',
     'Анкета кандидата:',
-    ...PROFILE_FACTS.map((f) => `- ${f}`),
+    ...cfg.profile.facts.map((f) => `- ${f}`),
     `- Желаемая зарплата для этой вакансии: ${input.salary}. На любой вопрос о зарплате,`,
     '  доходе или ожиданиях отвечай этой суммой.',
     '',
