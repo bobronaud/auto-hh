@@ -11,8 +11,8 @@ import type { Config } from '../config/schema.js'
 
 const log = logger('chats')
 
-/** The owner's 15 seconds for the assistant to write its next question, randomised (invariant 8). */
-const PASS_GAP_MS: [number, number] = [15_000, 18_000]
+/** The owner's 30 seconds (was 15, too short) for the assistant to write its next question, randomised (invariant 8). */
+const PASS_GAP_MS: [number, number] = [30_000, 33_000]
 /** A run that never runs dry is a bug, not a busy inbox. */
 const MAX_PASSES = 40
 /** Passes a chat may sit in "we spoke last" before we stop waiting for the assistant. */
@@ -177,7 +177,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
         // first question arrived during this pass — without the pause.
         continue
       }
-      log.info(`пауза ~15 с — помощник пишет следующие вопросы`)
+      log.info(`пауза ~30 с — помощник пишет следующие вопросы`)
       await randomBetween(...PASS_GAP_MS)
     }
     if (result.passes >= MAX_PASSES) result.stopReason = 'max_passes'
