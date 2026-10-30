@@ -144,7 +144,12 @@ export function App() {
               <button onClick={() => void run('chats')} title='ответить ИИ-помощнику hh в чатах после откликов'>
                 разобрать чаты
               </button>
-              <button onClick={() => void run('session')}>проверить сессию</button>
+              <button
+                className={state.selectorHealth.alarms.length > 0 ? 'danger' : ''}
+                onClick={() => void run('selfcheck')}
+                title='пройти выдачу, вакансию, отклик (без отправки) и чат теми же функциями, что прогоны, и сказать, что сломалось'>
+                проверить селекторы
+              </button>
             </>
           )}
         </div>

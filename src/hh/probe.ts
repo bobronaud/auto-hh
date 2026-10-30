@@ -36,13 +36,13 @@ const MAX_VACANCIES = 8
  * diagnosed later without re-running the whole thing.
  */
 
-interface Hit {
+export interface Hit {
   selector: string
   count: number
   sample?: string
 }
 
-interface GroupResult {
+export interface GroupResult {
   group: string
   key: string
   hits: Hit[]
@@ -62,7 +62,7 @@ async function firstLocator(page: Page, candidates: readonly string[]) {
   return null
 }
 
-async function probeGroup(
+export async function probeGroup(
   page: Page,
   group: string,
   key: string,

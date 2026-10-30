@@ -7,6 +7,8 @@ import {
   type DashboardState,
   type HealthReport,
   type RunMode,
+  type SelfCheckReport,
+  screenshotUrl,
 } from './api';
 import { dateTime } from './common';
 
@@ -21,6 +23,7 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
           хранится, поэтому кнопки входа здесь нет и не будет.
         </div>
       )}
+      <Alarms state={state} onChange={onChange} />
       <div className='cards'>
         <Card label='в очереди' value={counts.pending} sub={`${counts.vacancies} вакансий собрано всего`} />
         {/* Отправлено и лимит — одна цифра, а не две карточки: вопрос всегда «сколько
@@ -50,6 +53,7 @@ export function Dashboard({ state, onChange }: { state: DashboardState; onChange
           value={counts.appliedTotal}
           sub={`пробных прогонов ${counts.byStatus.dry_run ?? 0}`}
         />
+        <SelectorCard health={state.selectorHealth} />
       </div>
 
       <div className='section'>
@@ -151,6 +155,68 @@ function Letter({ letter, busy, onSaved }: { letter: DashboardState['letter']; b
   );
 }
 
+/**
+ * Open selector alarms, above everything else. The one banner on the dashboard on
+ * purpose: on 27-29.10 the chat markup moved and every run reported zeros for days —
+ * a signal that can be missed is how that happened.
+ */
+function Alarms({ state, onChange }: { state: DashboardState; onChange: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const { alarms } = state.selectorHealth;
+  if (alarms.length === 0) return null;
+
+  const act = async (f: () => Promise<unknown>): Promise<void> => {
+    setError(null);
+    try {
+      await f();
+      onChange();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <div className='notice danger'>
+      <b>похоже, hh сменил вёрстку — прогоны могут молча ничего не делать</b>
+      <ul className='alarms'>
+        {alarms.map((a) => (
+          <li key={a.id}>
+            <span className='dim'>{dateTime(a.created_at)} · </span>
+            {a.message}
+          </li>
+        ))}
+      </ul>
+      <div className='letter-actions'>
+        <button className='primary' disabled={!!state.run} onClick={() => void act(() => api.run('selfcheck'))}>
+          проверить селекторы
+        </button>
+        <button disabled={!!state.run} onClick={() => void act(() => api.resolveAlarms())} title='это не вёрстка — закрыть тревоги'>
+          разобрал
+        </button>
+        <span className='dim'>зелёная проверка закрывает тревоги сама</span>
+      </div>
+      {error && <div className='danger-text'>{error}</div>}
+    </div>
+  );
+}
+
+function SelectorCard({ health }: { health: DashboardState['selectorHealth'] }) {
+  const { lastCheck, alarms } = health;
+  const broken = (lastCheck && !lastCheck.ok) || alarms.length > 0;
+  return (
+    <Card
+      label='селекторы'
+      value={!lastCheck ? '—' : lastCheck.ok ? 'ок' : `сломано ${lastCheck.broken}`}
+      sub={
+        (lastCheck ? `проверено ${dateTime(lastCheck.at)}` : 'ещё не проверялись') +
+        (alarms.length ? ` · тревог ${alarms.length}` : '')
+      }
+      // Green on «ок», red on a broken check or an open alarm; grey only before the first check.
+      tone={broken ? 'danger' : lastCheck ? 'ok' : undefined}
+    />
+  );
+}
+
 function Card({
   label,
   value,
@@ -188,6 +254,7 @@ const RUN_TITLES: Record<RunMode, string> = {
   apply: 'отклики',
   session: 'проверка сессии',
   chats: 'разбор чатов',
+  selfcheck: 'проверка селекторов',
 };
 
 function duration(fromIso: string, toIso: string): string {
@@ -236,6 +303,7 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
         // generic "отсеяно" heading over raw reason codes did not.
         ...Object.entries(r.dropped ?? {}).map(([k, n]): Stat => [DROP_LABEL[k] ?? k, n]),
         ...breakdown('по резюме', r.byResume),
+        ...alarmStats(r.alarms),
       ];
     }
     case 'apply': {
@@ -248,7 +316,8 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
         ['ручные', r.needsHuman, 'warn'],
         ['пропущено', r.skipped],
         ['неуспешно', r.failed, 'danger'],
-        ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
+        ...(r.stopReason ? ([['остановлен', STOP_LABEL[r.stopReason] ?? r.stopReason]] as Stat[]) : []),
+        ...alarmStats(r.alarms),
       ];
     }
     case 'chats': {
@@ -262,9 +331,14 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
         ['рассылки и отказы', r.mailings ?? 0],
         ['помощник закончил', r.finished],
         ['не отправилось', r.failed, 'danger'],
+        ...(r.unreadable ? ([['лента не прочиталась', r.unreadable, 'danger']] as Stat[]) : []),
         ...(r.stopReason ? ([['остановлен', r.stopReason]] as Stat[]) : []),
+        ...alarmStats(r.alarms),
       ];
     }
+    case 'selfcheck':
+      // Rendered as a list of checks by SelfCheckView, not as label/value rows.
+      return null;
     case 'session': {
       const r = result as HealthReport;
       if (typeof r.loggedIn !== 'boolean') return null;
@@ -282,10 +356,47 @@ function runStats(mode: RunMode, result: unknown): Stat[] | null {
   }
 }
 
+const STOP_LABEL: Record<string, string> = {
+  selectors_suspect: 'похоже на сломанные селекторы',
+};
+
+function alarmStats(alarms: string[] | undefined): Stat[] {
+  return (alarms ?? []).map((a, i): Stat => [i === 0 ? 'тревога' : '', a, 'danger', true]);
+}
+
+/** One line per check; a broken one says what, which selector keys, and where the dump is. */
+function SelfCheckView({ report }: { report: SelfCheckReport }) {
+  return (
+    <ul className='selfcheck'>
+      {report.checks.map((c, i) => (
+        <li key={i} className={c.status}>
+          <span className='mark'>{c.status === 'ok' ? '✓' : c.status === 'broken' ? '✗' : '–'}</span>
+          <b>{c.name}</b>: {c.detail}
+          {c.missingKeys?.length ? (
+            <div className='mono'>не найдено: {c.missingKeys.join(', ')}</div>
+          ) : null}
+          {c.screenshot && (
+            <div>
+              <a href={screenshotUrl(c.screenshot)} target='_blank' rel='noreferrer'>
+                скриншот
+              </a>
+              {c.dump && <span className='dim mono'> · html: {c.dump}</span>}
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Last run as readable text; the raw result stays one click away for debugging. */
 function LastRun({ run }: { run: NonNullable<DashboardState['lastRun']> }) {
   const [showJson, setShowJson] = useState(false);
-  const stats = run.ok ? runStats(run.mode, run.result) : null;
+  const report =
+    run.ok && run.mode === 'selfcheck' && Array.isArray((run.result as SelfCheckReport | null)?.checks)
+      ? (run.result as SelfCheckReport)
+      : null;
+  const stats = run.ok && !report ? runStats(run.mode, run.result) : null;
 
   return (
     <div className='section'>
@@ -296,15 +407,18 @@ function LastRun({ run }: { run: NonNullable<DashboardState['lastRun']> }) {
         {!run.ok && <div className='danger-text'>упал: {String(run.result)}</div>}
         {stats && (
           <dl className='run-stats'>
-            {stats.map(([label, value, tone, always]) => (
-              <Fragment key={label}>
+            {stats.map(([label, value, tone, always], i) => (
+              <Fragment key={`${label}-${i}`}>
                 <dt className={always ? tone : undefined}>{label}</dt>
                 <dd className={value === 0 && !always ? 'zero' : tone}>{value}</dd>
               </Fragment>
             ))}
           </dl>
         )}
-        {run.ok && !stats && <div className='dim' style={{ marginTop: 6 }}>итог в незнакомом виде — см. JSON</div>}
+        {report && <SelfCheckView report={report} />}
+        {run.ok && !stats && !report && (
+          <div className='dim' style={{ marginTop: 6 }}>итог в незнакомом виде — см. JSON</div>
+        )}
         <div className='run-json'>
           <button className='small' onClick={() => setShowJson((v) => !v)}>
             {showJson ? 'скрыть JSON' : 'показать JSON'}

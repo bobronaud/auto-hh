@@ -23,6 +23,7 @@
     "requeue": "tsx src/cli.ts requeue",
     "letters": "tsx src/cli.ts letters",
     "chats": "tsx src/cli.ts chats",
+    "selfcheck": "tsx src/cli.ts selfcheck",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

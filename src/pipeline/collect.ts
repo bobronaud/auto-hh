@@ -1,10 +1,11 @@
 import { openContext, getPage } from '../hh/browser.js'
-import { collectVacancies } from '../hh/search.js'
+import { collectVacancies, type CollectStats } from '../hh/search.js'
 import { applyFilters, DROP_LABEL, type DropReason } from '../scoring/filters.js'
 import { routeResume } from '../scoring/resumeRouter.js'
 import { Repo } from '../db/repo.js'
 import { logger } from '../core/logger.js'
 import type { Config } from '../config/schema.js'
+import { collectAlarms, raiseAlarms } from './tripwires.js'
 
 const log = logger('collect')
 
@@ -22,6 +23,8 @@ export interface CollectResult {
   dropped: Record<string, number>
   /** Resume routing of the queued vacancies, by title. */
   byResume: Record<string, number>
+  /** Tripwires that fired (see tripwires.ts); also stored as open alarms. */
+  alarms?: string[]
 }
 
 /**
@@ -35,8 +38,11 @@ export async function collect(cfg: Config): Promise<CollectResult> {
 
   try {
     const page = await getPage(ctx)
-    const cards = await collectVacancies(page, cfg)
+    const stats: CollectStats = { pages: 0, domCards: 0, parsedCards: 0, withCompany: 0 }
+    const cards = await collectVacancies(page, cfg, stats)
     log.info(`scraped ${cards.length} unique vacancies`)
+    const alarms = collectAlarms(stats)
+    raiseAlarms(repo, log, 'collect', alarms)
 
     const appliedIds = repo.appliedHhIds()
     const { kept, dropped, counts } = applyFilters(cards, cfg, appliedIds)
@@ -58,7 +64,14 @@ export async function collect(cfg: Config): Promise<CollectResult> {
       byResume[route.resume.id] = (byResume[route.resume.id] ?? 0) + 1
     }
 
-    return { scraped: cards.length, queued, handled: kept.length - queued, dropped: counts, byResume }
+    return {
+      scraped: cards.length,
+      queued,
+      handled: kept.length - queued,
+      dropped: counts,
+      byResume,
+      ...(alarms.length ? { alarms } : {}),
+    }
   } finally {
     await ctx.close()
   }

@@ -10,7 +10,7 @@ import { dashboardState } from './state.js'
 import { sseHandler, pingState } from './events.js'
 import { startRun, BusyError, currentRun, type RunMode } from './runner.js'
 
-const RUN_MODES: RunMode[] = ['collect', 'apply', 'session', 'chats']
+const RUN_MODES: RunMode[] = ['collect', 'apply', 'session', 'chats', 'selfcheck']
 /** Collect periods the UI offers; 0 is "all time". hh itself only knows 1/3/7/30. */
 const COLLECT_PERIODS = [0, 3, 7]
 
@@ -106,6 +106,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * The same, for everything open at once. A queue of twenty is twenty clicks, and a
    * queue nobody clears is a queue nobody reads.
    */
+  /**
+   * Close the selector alarms by hand: the owner looked and it was not the markup (an
+   * empty search, a run of genuinely closed vacancies). A green check closes them too.
+   */
+  app.post('/api/alarms/resolve', () => {
+    const n = repo.resolveAlarms()
+    pingState('alarms:resolved')
+    return { ok: true, resolved: n }
+  })
+
   app.post('/api/needs-human/resolve-all', () => {
     const n = repo.resolveAllNeedsHuman()
     pingState('needs-human:resolved')

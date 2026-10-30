@@ -49,7 +49,7 @@ export async function currentResumeTitle(page: Page): Promise<string | null> {
  * Titles offered by the picker. Only meaningful once the dropdown is open, and the
  * trigger itself also carries a resume-title node — hence the scoping to options.
  */
-async function availableTitles(page: Page): Promise<string[]> {
+export async function availableTitles(page: Page): Promise<string[]> {
   const options = page.locator(selectors.apply.resumeOption[0]!)
   return (
     await options
@@ -132,6 +132,6 @@ function normalise(s: string): string {
   return s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function matches(a: string, b: string): boolean {
+export function matches(a: string, b: string): boolean {
   return normalise(a).toLocaleLowerCase('ru') === normalise(b).toLocaleLowerCase('ru')
 }

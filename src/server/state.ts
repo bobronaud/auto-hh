@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { loadConfig, configSource } from '../config/load.js'
 import { limitWarnings, HH_DAILY_CEILING } from '../config/schema.js'
 import { RateLimiter, type LimitState } from '../queue/rateLimiter.js'
-import { Repo } from '../db/repo.js'
+import { Repo, type AlarmRow } from '../db/repo.js'
 import { BROWSER_PROFILE_DIR, projectPath } from '../core/paths.js'
 import { currentRun, lastRun, type RunOutcome, type RunState } from './runner.js'
 
@@ -34,6 +34,11 @@ export interface DashboardState {
   session: { hasProfile: boolean; profilePath: string }
   run: RunState | null
   lastRun: RunOutcome | null
+  /** Whether hh's markup still matches selectors.ts, as far as anything has seen. */
+  selectorHealth: {
+    lastCheck: { at: string; ok: boolean; broken: number } | null
+    alarms: AlarmRow[]
+  }
 }
 
 /**
@@ -89,5 +94,19 @@ export function dashboardState(): DashboardState {
     },
     run: currentRun(),
     lastRun: lastRun(),
+    selectorHealth: { lastCheck: lastCheckSummary(repo), alarms: repo.openAlarms() },
   }
+}
+
+function lastCheckSummary(repo: Repo): DashboardState['selectorHealth']['lastCheck'] {
+  const row = repo.lastSelfCheck()
+  if (!row) return null
+  let broken = 0
+  try {
+    const report = JSON.parse(row.report_json) as { checks?: Array<{ status: string }> }
+    broken = report.checks?.filter((c) => c.status === 'broken').length ?? 0
+  } catch {
+    // A report that does not parse still says when and whether.
+  }
+  return { at: row.created_at, ok: row.ok === 1, broken }
 }

@@ -34,8 +34,24 @@ export type ChatState =
 // The assistant's closing turns. The summary comes first and the "thanks" right after
 // it, then the system line about leaving; a pass can land between any two of them.
 const LEFT = /покинул[аи]?\s+чат/iu
-const CLOSING = /в\s+разговоре\s+с\s+кандидатом\s+я\s+узнал|благодарю\s+за\s+ответы/iu
+// «Спасибо за ответы! Мы передали их работодателю.» — the robot recruiter's close (29.10).
+const CLOSING = /в\s+разговоре\s+с\s+кандидатом\s+я\s+узнал|благодарю\s+за\s+ответы|мы\s+передали\s+их\s+работодателю/iu
 
+
+/**
+ * The bot's last two messages say the same thing (owner, 30.10) — it sent a message
+ * twice, or asked the question again after our reply. Either way the conversation has
+ * gone off the rails, and another automatic answer would only feed the loop: the chat
+ * goes to the owner. Our replies in between do not break the "twice in a row" — from
+ * the bot's side they are still consecutive.
+ */
+export function botRepeated(messages: readonly ChatMessage[]): string | null {
+  const bot = messages.filter((m) => m.author === 'assistant')
+  if (bot.length < 2) return null
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru')
+  const last = norm(bot.at(-1)!.text)
+  return last && last === norm(bot.at(-2)!.text) ? bot.at(-1)!.text : null
+}
 
 export function chatState(messages: readonly ChatMessage[]): ChatState {
   const spoken = messages.filter((m) => m.author !== 'system')

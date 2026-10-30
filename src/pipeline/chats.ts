@@ -1,6 +1,6 @@
 import { openContext, getPage, HumanNeededError, randomBetween, screenshot } from '../hh/browser.js'
 import { listChats, readChat, sendReply, type ChatSummary } from '../hh/chat.js'
-import { chatState } from '../chat/classify.js'
+import { chatState, botRepeated } from '../chat/classify.js'
 import { answerChat } from '../chat/generate.js'
 import { classifyEmployerMessage } from '../chat/employer.js'
 import { routeResume } from '../scoring/resumeRouter.js'
@@ -8,6 +8,7 @@ import { salaryAnswer } from '../answers/salary.js'
 import { Repo } from '../db/repo.js'
 import { logger } from '../core/logger.js'
 import type { Config } from '../config/schema.js'
+import { raiseAlarms } from './tripwires.js'
 
 const log = logger('chats')
 
@@ -28,7 +29,15 @@ export interface ChatRunResult {
   mailings: number
   finished: number
   failed: number
+  /**
+   * Chats where not one message was recognised. A chat always has at least the letter
+   * or the employer's message, so this is markup hh changed under selectors.chat —
+   * the 29.10 change read every chat as "nothing to answer" for days, silently.
+   */
+  unreadable: number
   stopReason?: string
+  /** Tripwires that fired (see tripwires.ts); also stored as open alarms. */
+  alarms?: string[]
 }
 
 /**
@@ -39,10 +48,14 @@ export interface ChatRunResult {
  * open on our side, which marks it read, and it would never show up as unread again.
  *
  * dryRun does not apply here (owner, 05.10): replies always go out.
+ *
+ * `extraIds` — chats to read even though they are not unread: catching up after the
+ * parser was broken (29.10 markup change), when those chats were opened and so marked
+ * read without being handled. Re-reading is safe — handled questions are in the DB.
  */
-export async function runChats(cfg: Config): Promise<ChatRunResult> {
+export async function runChats(cfg: Config, extraIds: readonly string[] = []): Promise<ChatRunResult> {
   const repo = new Repo()
-  const result: ChatRunResult = { passes: 0, chats: 0, answered: 0, needsHuman: 0, human: 0, mailings: 0, finished: 0, failed: 0 }
+  const result: ChatRunResult = { passes: 0, chats: 0, answered: 0, needsHuman: 0, human: 0, mailings: 0, finished: 0, failed: 0, unreadable: 0 }
   // chat id → idle passes so far, for chats where we spoke last.
   const awaiting = new Map<string, number>()
   // Chats settled this run: finished, parked or human — never reopened.
@@ -52,7 +65,7 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
   // Chats sitting with the owner as "a recruiter writes": read once more, since some
   // were a bot all along («Робот-рекрутер» before 06.10). Already read, so the unread
   // list alone would never bring them back.
-  const revisit = new Set(repo.chatsLeftToOwner())
+  const revisit = new Set([...repo.chatsLeftToOwner(), ...extraIds])
 
   const ctx = await openContext(cfg)
   try {
@@ -95,6 +108,9 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
           if (state.kind === 'finished') {
             result.finished++
             log.info(`   ${tag}: помощник закончил`)
+          } else if (!chat.messages.some((m) => m.author !== 'system')) {
+            result.unreadable++
+            log.warn(`   ${tag}: в ленте не распознано ни одного сообщения — похоже, hh сменил вёрстку чата (selectors.chat.bubble); дамп: npm run selectors:probe -- --chat ${id}`)
           } else {
             // Said out loud: a pass that answers nothing should still say what it saw.
             const lastTitle = chat.messages.filter((m) => m.author !== 'system').at(-1)?.title
@@ -118,7 +134,23 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
           continue
         }
 
-        // A question from the assistant.
+        // A question from the assistant — unless it is the same message twice in a row.
+        if (botRepeated(chat.messages)) {
+          done.add(id)
+          repo.recordChatReply({
+            chatId: id,
+            title,
+            company,
+            question: state.question,
+            status: 'needs_human',
+            reason: 'бот прислал одно и то же сообщение два раза подряд — посмотрите чат',
+          })
+          repo.resolveChatHumanRows(id)
+          result.needsHuman++
+          log.warn(`   ${tag}: бот повторил сообщение — оставлено вам`)
+          continue
+        }
+
         const vacancy = chat.vacancyHhId ? repo.getVacancyByHhId(chat.vacancyHhId) : undefined
         const vTitle = vacancy?.title ?? title ?? ''
         const route = routeResume(cfg, { title: vTitle, description: vacancy?.description })
@@ -181,6 +213,12 @@ export async function runChats(cfg: Config): Promise<ChatRunResult> {
       await randomBetween(...PASS_GAP_MS)
     }
     if (result.passes >= MAX_PASSES) result.stopReason = 'max_passes'
+    if (result.unreadable > 0) {
+      result.alarms = [
+        `чаты: в ${result.unreadable} из ${result.chats} чатов не распознано ни одного сообщения — selectors.chat.bubble / message`,
+      ]
+      raiseAlarms(repo, log, 'chats', result.alarms)
+    }
   } catch (e) {
     if (!(e instanceof HumanNeededError)) throw e
     result.stopReason = e.state

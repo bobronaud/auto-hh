@@ -93,6 +93,13 @@ export async function readChat(page: Page, cfg: Config, id: string): Promise<Cha
  * The hyphen may come as any dash.
  */
 const BOT_AUTHOR = /ии[\s\p{Pd}]*помощник|робот[\s\p{Pd}]*рекрутер/iu
+/**
+ * hh's own voice framing the bot's questionnaire (29.10): «Спасибо за интерес к вакансии…»
+ * before the questions, «Спасибо за ответы! Мы передали их работодателю.» before the bot
+ * leaves. Part of the bot only in a chat the bot is in — on its own, «hh.ru» offering a
+ * vacancy is an invitation the owner has to read.
+ */
+const HH_AUTHOR = /^hh\.ru$/iu
 
 /** Parse the open chat. Separate from navigation so fixtures can test it. */
 export async function readThread(page: Page): Promise<ChatView> {
@@ -111,6 +118,8 @@ export async function readThread(page: Page): Promise<ChatView> {
 
   // The author's name heads only the first bubble of a run; carry it forward.
   const messages: ChatMessage[] = []
+  const hhVoice: ChatMessage[] = []
+  let botPresent = false
   let lastForeign: string | null = null
   for (const m of raw) {
     if (m.system) {
@@ -125,9 +134,13 @@ export async function readThread(page: Page): Promise<ChatView> {
     } else {
       if (m.author) lastForeign = m.author
       author = lastForeign && BOT_AUTHOR.test(lastForeign) ? 'assistant' : 'employer'
+      if (author === 'assistant') botPresent = true
     }
-    messages.push({ author, text: m.text, title: m.title })
+    const message: ChatMessage = { author, text: m.text, title: m.title }
+    if (author === 'employer' && lastForeign && HH_AUTHOR.test(lastForeign)) hhVoice.push(message)
+    messages.push(message)
   }
+  if (botPresent) for (const m of hhVoice) m.author = 'assistant'
 
   const header = await textOf(page, S.headerVacancy)
   const href = await page.locator(any(S.vacancyLink)).first().getAttribute('href', { timeout: 1000 }).catch(() => null)

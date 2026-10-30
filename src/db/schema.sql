@@ -158,3 +158,23 @@ CREATE TABLE IF NOT EXISTS chat_replies (
   created_at      TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_replies_chat ON chat_replies (chat_id);
+
+-- Признаки сломанной вёрстки hh (с 30.10). Пишут растяжки в прогонах (сбор без
+-- карточек, серия подозрительных исходов откликов, нечитаемая лента чата) и проверка
+-- селекторов. Висит на дашборде красным, пока зелёная проверка или владелец не закроют.
+-- Повод — 27-29.10: вёрстка чата сменилась, разбор несколько дней молча отвечал нулями.
+CREATE TABLE IF NOT EXISTS selector_alarms (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  source      TEXT    NOT NULL,   -- collect | apply | chats | selfcheck
+  message     TEXT    NOT NULL,
+  created_at  TEXT    NOT NULL,
+  resolved_at TEXT
+);
+
+-- Результаты проверки селекторов: отчёт целиком, JSON.
+CREATE TABLE IF NOT EXISTS selector_checks (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ok          INTEGER NOT NULL,
+  report_json TEXT    NOT NULL,
+  created_at  TEXT    NOT NULL
+);

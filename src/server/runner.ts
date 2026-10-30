@@ -4,7 +4,7 @@ import { pingState } from './events.js'
 
 const log = logger('ui')
 
-export type RunMode = 'collect' | 'apply' | 'session' | 'chats'
+export type RunMode = 'collect' | 'apply' | 'session' | 'chats' | 'selfcheck'
 
 export interface RunState {
   mode: RunMode
@@ -105,6 +105,10 @@ async function execute({ mode, limit, period }: RunState): Promise<unknown> {
     case 'session': {
       const { health } = await import('../hh/auth.js')
       return await health(cfg)
+    }
+    case 'selfcheck': {
+      const { runSelfCheck } = await import('../pipeline/selfcheck.js')
+      return await runSelfCheck(cfg)
     }
   }
 }

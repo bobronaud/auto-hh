@@ -257,7 +257,7 @@ const captchaCandidates = [
  * and end the wait at once. The other-country warning is left out after it has been
  * confirmed: its button may linger for a moment and end the wait just as early.
  */
-async function waitForApplyFlow(page: Page, opts: { afterConfirm?: boolean } = {}): Promise<void> {
+export async function waitForApplyFlow(page: Page, opts: { afterConfirm?: boolean } = {}): Promise<void> {
   await waitForAny(
     page,
     [

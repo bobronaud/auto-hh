@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chatState, type ChatMessage } from '../src/chat/classify.js'
+import { chatState, botRepeated, type ChatMessage } from '../src/chat/classify.js'
 import { interpretReply } from '../src/chat/generate.js'
 
 // A finished assistant chat (structure from a live dump 05.10, text replaced), cut down.
@@ -47,6 +47,16 @@ test('summary, thanks, left → finished at every step', () => {
 test('a live recruiter speaking last is left to the owner', () => {
   const s = chatState([LETTER, { author: 'employer', text: 'Добрый день! Когда удобно созвониться?' }])
   assert.deepEqual(s, { kind: 'human', last: 'Добрый день! Когда удобно созвониться?' })
+})
+
+test('bot repeating itself is caught, with or without our reply in between (30.10)', () => {
+  assert.equal(botRepeated([LETTER, GREETING, Q1, A1, Q2]), null)
+  // Asked again after our answer; whitespace differences do not hide the repeat.
+  assert.ok(botRepeated([LETTER, GREETING, Q1, A1, { ...Q1, text: `  ${Q1.text}\n` }]))
+  assert.ok(botRepeated([LETTER, GREETING, Q1, Q1]))
+  // Only the last two count: a repeat earlier in the chat that the bot moved on from is fine.
+  assert.equal(botRepeated([LETTER, Q1, Q1, A1, Q2]), null)
+  assert.equal(botRepeated([LETTER, Q1]), null)
 })
 
 test('only our letter → other', () => {
@@ -125,6 +135,51 @@ test('readThread on a finished assistant chat (05.10)', async () => {
   const cut = v.messages.slice(0, 4)
   const s = chatState(cut)
   assert.ok(s.kind === 'question' && s.question.endsWith('на бэкенде?'))
+})
+
+// hh moved to new bubble markup between 27.10 and 29.10; until the selectors followed,
+// every bubble was skipped and every chat read as "nothing to answer".
+const CHAT_2910 = readFileSync(new URL('./fixtures/chat-open-2910.html', import.meta.url), 'utf8')
+
+test('readThread on the 29.10 markup: bubbles, authors, titles', async () => {
+  await page.setContent(CHAT_2910)
+  const v = await readThread(page)
+
+  assert.equal(v.title, 'Frontend developer (react/redux)')
+  assert.equal(v.company, 'ООО Пример')
+  assert.equal(v.vacancyHhId, '100000002')
+  assert.deepEqual(
+    v.messages.map((m) => m.author),
+    // «hh.ru» opens the bot's questionnaire: the bot's, not an employer's.
+    ['me', 'system', 'assistant', 'assistant', 'me', 'assistant', 'assistant'],
+  )
+  assert.equal(v.messages[0]!.title, 'Отклик на вакансию')
+  assert.equal(v.messages[4]!.text, 'Нет, не критична.')
+  const s = chatState(v.messages)
+  assert.ok(s.kind === 'question' && s.question.startsWith('Готовы ли') && s.question.endsWith('офис в Москве.'))
+})
+
+test('readThread on the 29.10 markup: a live recruiter is left to the owner', async () => {
+  await page.setContent(CHAT_2910.replace(/<div>Робот-рекрутер<\/div>/g, '<div>Иван</div>'))
+  const v = await readThread(page)
+  // No bot in this chat, so «hh.ru» stays an employer too.
+  assert.equal(v.messages[2]!.author, 'employer')
+  const s = chatState(v.messages)
+  assert.ok(s.kind === 'human' && s.last.startsWith('Готовы ли') && s.last.endsWith('офис в Москве.'))
+})
+
+test('readThread on the 29.10 markup: «hh.ru» closing the questionnaire is the bot finishing', async () => {
+  const closing = CHAT_2910.match(/<div data-qa="chatik-chat-message-1003">[\s\S]*?\n\n/)![0]
+    .replace(/1003/g, '1008')
+    .replace(/<p>[^<]*<\/p>/, '<p>Спасибо за ответы! Мы передали их работодателю.</p>')
+  const left = '<div data-qa="chatik-chat-message-1009"><div data-qa="participant-action-message-1"><div data-qa="chat-marker-label"><span data-qa="chat-marker-label-text"><div>Пользователь Робот-рекрутер покинул чат</div></span></div></div></div>'
+  const html = CHAT_2910.replace('<div data-qa="chatik-chat-message--2">', `${closing}${left}\n<div data-qa="chatik-chat-message--2">`)
+  await page.setContent(html)
+  const v = await readThread(page)
+  assert.equal(v.messages.at(-2)!.author, 'assistant')
+  assert.equal(chatState(v.messages).kind, 'finished')
+  // A pass landing before the bot leaves.
+  assert.equal(chatState(v.messages.slice(0, -1)).kind, 'finished')
 })
 
 test('a rejection is not left to the owner', () => {

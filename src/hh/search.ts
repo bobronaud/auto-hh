@@ -58,8 +58,12 @@ export function parseSalary(text: string | null | undefined): {
   return { from: numbers[0]!, to: numbers[1]!, currency }
 }
 
-/** Read every card on the current results page. */
-async function scrapePage(page: Page): Promise<ScrapedCard[]> {
+/**
+ * Read every card on the current results page. `domCards` counts card nodes before
+ * parsing: cards without a url or title are dropped below, and a gap between the two
+ * numbers is a broken title selector, not a short page.
+ */
+export async function scrapePage(page: Page): Promise<{ cards: ScrapedCard[]; domCards: number }> {
   const sel = {
     card: selectors.search.card[0]!,
     title: selectors.search.cardTitleLink[0]!,
@@ -124,7 +128,7 @@ async function scrapePage(page: Page): Promise<ScrapedCard[]> {
       raw: r,
     })
   }
-  return cards
+  return { cards, domCards: raw.length }
 }
 
 /** Are there more result pages after this one? */
@@ -142,7 +146,19 @@ async function hasMorePages(page: Page, currentPage: number): Promise<boolean> {
  * yields nothing — an empty page usually means hh stopped serving results rather than
  * that we genuinely reached the end.
  */
-export async function collectVacancies(page: Page, cfg: Config): Promise<ScrapedCard[]> {
+/** What the walk saw, for the tripwires in collect: markup that moved shows up here first. */
+export interface CollectStats {
+  pages: number
+  domCards: number
+  parsedCards: number
+  withCompany: number
+}
+
+export async function collectVacancies(
+  page: Page,
+  cfg: Config,
+  stats: CollectStats = { pages: 0, domCards: 0, parsedCards: 0, withCompany: 0 },
+): Promise<ScrapedCard[]> {
   const all = new Map<string, ScrapedCard>()
 
   for (let p = 0; p < cfg.search.maxPages; p++) {
@@ -158,7 +174,11 @@ export async function collectVacancies(page: Page, cfg: Config): Promise<Scraped
       .waitFor({ state: 'visible', timeout: 10_000 })
       .catch(() => {})
 
-    const cards = await scrapePage(page)
+    const { cards, domCards } = await scrapePage(page)
+    stats.pages++
+    stats.domCards += domCards
+    stats.parsedCards += cards.length
+    stats.withCompany += cards.filter((c) => c.company).length
     if (cards.length === 0) {
       log.warn('no cards on this page — stopping')
       break

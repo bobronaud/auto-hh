@@ -359,11 +359,15 @@ export const selectors = {
    * Живёт в основном документе, не в iframe.
    *
    * Сообщение — [data-qa="chatik-chat-message-<id>"]; внутри либо пузырь
-   * (chat-bubble-wrapper), либо системная строка participant-action-message-N
+   * (chatik-chat-message-bubble, до 27.10 — chat-bubble-wrapper), либо системная
+   * строка participant-action-message-N
    * («Пользователь ИИ-помощник присоединился к чату / покинул чат»).
    * Своё от чужого — по статусу доставки, см. ownMark.
-   * Имя автора (chat-bubble-author-name, «ИИ-помощник») стоит только у ПЕРВОГО
-   * сообщения серии — для следующих автор переносится.
+   * Имя автора (chat-bubble-label, до 27.10 — chat-bubble-author-name; «ИИ-помощник»,
+   * «Робот-рекрутер», «hh.ru», имя рекрутера) стоит только у ПЕРВОГО сообщения серии —
+   * для следующих автор переносится.
+   * Смену вёрстки между 27.10 и 29.10 пропустили молча: без пузырей лента выглядела пустой, и
+   * каждый чат читался как «отвечать нечего». Новая разметка — test/fixtures/chat-open-2910.html.
    * Кнопки «отправить» в дампе нет: при пустом поле на её месте запись голоса.
    * Кандидаты ниже — догадки, при отсутствии отправляем Enter.
    */
@@ -378,10 +382,11 @@ export const selectors = {
     listCompany: ['[data-qa="chat-cell-subtitle"]'],
     message: ['[data-qa^="chatik-chat-message-"]:not([data-qa$="-text"])'],
     systemMessage: ['[data-qa^="participant-action-message"]'],
-    bubble: ['[data-qa="chat-bubble-wrapper"]'],
+    /** data-qa здесь — список через пробел: «chatik-chat-message-bubble chatik-chat-message-<id>-text». */
+    bubble: ['[data-qa~="chatik-chat-message-bubble"]', '[data-qa="chat-bubble-wrapper"]'],
     bubbleText: ['[data-qa="chat-bubble-text"]'],
-    bubbleTitle: ['[data-qa="chat-bubble-title"]'],
-    authorName: ['[data-qa="chat-bubble-author-name"]'],
+    bubbleTitle: ['[data-qa="chat-bubble-message-title"]', '[data-qa="chat-bubble-title"]'],
+    authorName: ['[data-qa="chat-bubble-label"]', '[data-qa="chat-bubble-author-name"]'],
     /**
      * Статус доставки есть только у своих: chat-bubble-icon-delivered, -read. У чужих
      * иконки либо нет (отказ работодателя), либо chat-bubble-icon-hidden — поэтому
@@ -390,6 +395,7 @@ export const selectors = {
     ownMark: [
       '[data-qa^="chat-bubble-icon-"]:not([data-qa="chat-bubble-icon-hidden"])',
       '[data-qa="desktop-message-menu"]',
+      '[data-qa="chatik-message-menu"]',
     ],
     headerTitle: ['[data-qa="participant-info-title"]'],
     /** «Вакансия» + название + «Перейти» одним текстом. */

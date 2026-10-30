@@ -76,6 +76,23 @@ export interface NeedsHumanRow {
 
 export type ChatReplyStatus = 'sent' | 'needs_human' | 'human' | 'failed'
 
+export type AlarmSource = 'collect' | 'apply' | 'chats' | 'selfcheck'
+
+export interface AlarmRow {
+  id: number
+  source: AlarmSource
+  message: string
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface SelfCheckRow {
+  id: number
+  ok: number
+  report_json: string
+  created_at: string
+}
+
 export interface ChatReplyRow {
   id: number
   chat_id: string
@@ -923,5 +940,57 @@ export class Repo {
       )
       .get() as { n: number }
     return row.n
+  }
+
+  // ------------------------------------------------------------ selector health
+
+  /**
+   * A sign that hh's markup moved under selectors.ts. The same open message from the
+   * same source is not stacked: a tripwire firing every run says one thing, not ten.
+   */
+  recordAlarm(source: AlarmSource, message: string): void {
+    const open = this.db
+      .prepare(`SELECT 1 FROM selector_alarms WHERE source = ? AND message = ? AND resolved_at IS NULL`)
+      .get(source, message)
+    if (open) return
+    this.db
+      .prepare(`INSERT INTO selector_alarms (source, message, created_at) VALUES (?, ?, ?)`)
+      .run(source, message, now())
+  }
+
+  openAlarms(): AlarmRow[] {
+    return this.db
+      .prepare(`SELECT * FROM selector_alarms WHERE resolved_at IS NULL ORDER BY id DESC`)
+      .all() as AlarmRow[]
+  }
+
+  resolveAlarms(): number {
+    return this.db
+      .prepare(`UPDATE selector_alarms SET resolved_at = ? WHERE resolved_at IS NULL`)
+      .run(now()).changes
+  }
+
+  recordSelfCheck(ok: boolean, report: unknown): void {
+    this.db
+      .prepare(`INSERT INTO selector_checks (ok, report_json, created_at) VALUES (?, ?, ?)`)
+      .run(ok ? 1 : 0, JSON.stringify(report), now())
+  }
+
+  lastSelfCheck(): SelfCheckRow | undefined {
+    return this.db.prepare(`SELECT * FROM selector_checks ORDER BY id DESC LIMIT 1`).get() as
+      | SelfCheckRow
+      | undefined
+  }
+
+  /** The newest chats where we answered a bot: read, and known to hold bot bubbles. */
+  recentBotChats(limit = 5): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT chat_id FROM chat_replies WHERE status = 'sent'
+           GROUP BY chat_id ORDER BY MAX(id) DESC LIMIT ?`,
+        )
+        .all(limit) as { chat_id: string }[]
+    ).map((r) => r.chat_id)
   }
 }

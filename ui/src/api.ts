@@ -16,7 +16,7 @@ export interface LimitState {
   nextSlotAt?: string
 }
 
-export type RunMode = 'collect' | 'apply' | 'session' | 'chats'
+export type RunMode = 'collect' | 'apply' | 'session' | 'chats' | 'selfcheck'
 
 export interface RunState {
   mode: RunMode
@@ -48,6 +48,35 @@ export interface DashboardState {
   session: { hasProfile: boolean; profilePath: string }
   run: RunState | null
   lastRun: { mode: RunMode; startedAt: string; finishedAt: string; ok: boolean; result: unknown } | null
+  selectorHealth: {
+    lastCheck: { at: string; ok: boolean; broken: number } | null
+    alarms: AlarmRow[]
+  }
+}
+
+export interface AlarmRow {
+  id: number
+  source: 'collect' | 'apply' | 'chats' | 'selfcheck'
+  message: string
+  created_at: string
+  resolved_at: string | null
+}
+
+/** Mirror of src/pipeline/selfcheck.ts. */
+export interface SelfCheck {
+  area: string
+  name: string
+  status: 'ok' | 'broken' | 'skipped'
+  detail: string
+  missingKeys?: string[]
+  dump?: string | null
+  screenshot?: string | null
+}
+
+export interface SelfCheckReport {
+  ok: boolean
+  checkedAt: string
+  checks: SelfCheck[]
 }
 
 /** Mirrors of the pipeline results (src/pipeline/*, src/hh/auth.ts) — what `lastRun.result` holds. */
@@ -57,6 +86,7 @@ export interface CollectResult {
   handled: number
   dropped: Record<string, number>
   byResume: Record<string, number>
+  alarms?: string[]
 }
 
 export interface ApplyResult {
@@ -67,6 +97,7 @@ export interface ApplyResult {
   skipped: number
   failed: number
   stopReason?: string
+  alarms?: string[]
 }
 
 export interface ChatRunResult {
@@ -78,7 +109,9 @@ export interface ChatRunResult {
   mailings: number
   finished: number
   failed: number
+  unreadable?: number
   stopReason?: string
+  alarms?: string[]
 }
 
 export interface ChatReplyRow {
@@ -203,6 +236,7 @@ export const api = {
   resolve: (id: number) => post<{ ok: true }>(`/api/needs-human/${id}/resolve`),
   requeueNeedsHuman: (id: number) => post<{ ok: true; id: number }>(`/api/needs-human/${id}/requeue`),
   resolveAll: () => post<{ ok: true; resolved: number }>('/api/needs-human/resolve-all'),
+  resolveAlarms: () => post<{ ok: true; resolved: number }>('/api/alarms/resolve'),
   approveLetter: (id: number, text?: string) =>
     post<{ ok: true; id: number }>(`/api/letters/${id}/approve`, text === undefined ? {} : { text }),
   dismissVacancy: (id: number) => post<{ ok: true; id: number }>(`/api/vacancies/${id}/dismiss`),

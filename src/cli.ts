@@ -71,7 +71,17 @@ async function main(): Promise<void> {
 
     case 'chats': {
       const { runChats } = await import('./pipeline/chats.js');
-      console.log(await runChats(loadConfig()));
+      // Optional chat ids: read these too, not only the unread ones (catch-up after a breakage).
+      const ids = process.argv.slice(3).filter((a) => /^\d+$/.test(a));
+      console.log(await runChats(loadConfig(), ids));
+      break;
+    }
+
+    case 'selfcheck': {
+      const { runSelfCheck, printSelfCheck } = await import('./pipeline/selfcheck.js');
+      const report = await runSelfCheck(loadConfig());
+      printSelfCheck(report);
+      if (!report.ok) process.exitCode = 1;
       break;
     }
 
@@ -94,10 +104,13 @@ auto-hh
   npm run login            Log in to hh.ru by hand, once. Saves the browser profile.
   npm run doctor           Check config, database, session — without touching hh.
   npm run selectors:probe  Verify every selector against live hh.ru (research stage 0).
+  npm run selfcheck        Does the pipeline still work on today's hh? Search, vacancy,
+                           apply form (never submitted), chat — broken ones named.
   npm run collect          Scrape the search results, filter and route. Sends nothing.
   npm run letters -- <n>   Write cover letters for the next n vacancies in the queue.
   npm run apply -- <n>     Answer up to n stored vacancies (dry run unless dryRun=false).
-  npm run chats            Answer hh's AI assistant in the chats after applications.
+  npm run chats [id…]      Answer hh's AI assistant in the chats after applications.
+                           With ids: also re-read those chats, read or not.
   npm run review           List vacancies parked for manual handling.
   npm run failures         List applications that did not go through, with causes.
   npm run requeue -- <code>  Put failed vacancies back in the queue after a fix.

@@ -6,6 +6,7 @@ import { Repo, type VacancyRow } from '../db/repo.js'
 import { logger } from '../core/logger.js'
 import { gap } from '../hh/browser.js'
 import type { Config } from '../config/schema.js'
+import { SuspectStreak, raiseAlarms } from './tripwires.js'
 
 const log = logger('run')
 
@@ -17,6 +18,8 @@ export interface RunResult {
   skipped: number
   failed: number
   stopReason?: string
+  /** Tripwires that fired (see tripwires.ts); also stored as open alarms. */
+  alarms?: string[]
 }
 
 /**
@@ -89,6 +92,17 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
   const runId = repo.startRun(cfg.dryRun ? 'dry_run' : 'apply')
   const ctx = await openContext(cfg)
 
+  const streak = new SuspectStreak()
+  // Returns true when the run has to stop: the outcomes look like moved markup.
+  const tripped = (o: Parameters<SuspectStreak['push']>[0]): boolean => {
+    const alarm = streak.push(o)
+    if (!alarm) return false
+    raiseAlarms(repo, log, 'apply', [alarm])
+    result.alarms = [...(result.alarms ?? []), alarm]
+    result.stopReason = 'selectors_suspect'
+    return true
+  }
+
   try {
     const page = await getPage(ctx)
 
@@ -153,10 +167,12 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
           errorMessage: (e as Error).message,
         })
         result.failed++
+        if (tripped({ status: 'failed', errorCode: 'exception', message: (e as Error).message })) break
         continue
       }
 
       recordOutcome(repo, runId, v, outcome, result, stored?.id ?? null)
+      if (tripped(outcome)) break
 
       if (outcome.status === 'blocked') {
         result.stopReason = 'limit_exceeded'
