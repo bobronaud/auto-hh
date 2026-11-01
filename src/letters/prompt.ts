@@ -1,7 +1,7 @@
 import type { Config, ResumeConfig } from '../config/schema.js'
 
 /** Bump when the wording changes, so stored letters stay attributable. */
-export const PROMPT_VERSION = 'v4'
+export const PROMPT_VERSION = 'v5'
 
 /**
  * Letters are returned between plain-text delimiters, not as JSON.
@@ -25,7 +25,7 @@ export interface LetterTarget {
  * The system prompt carries the rules; the user prompt carries the data.
  *
  * The rules are the owner's own, carried over from the prompt he used by hand in
- * claude.ai — they are not generic "write a good letter" advice and should not be
+ * a chat interface — they are not generic "write a good letter" advice and should not be
  * softened into it:
  *
  *   - It has to read as written by a person. That is mostly a typography rule: an em
@@ -70,6 +70,7 @@ export function systemPrompt(cfg: Config): string {
     '— Мотивация. Должно быть видно, что кандидату интересна именно эта вакансия:',
     '  зацепись за 1-2 конкретные детали из неё — продукт, стек, задачу.',
     `— Краткость. Цель — ${target} символов, жёсткий потолок — ${cfg.letter.maxChars}.`,
+    `  Минимальная длина — ${cfg.letter.minChars} символов: более короткое письмо не пройдёт проверку.`,
     '  Это 3-5 предложений, один абзац. Длинные письма никто не читает, и письмо',
     `  длиннее ${target + 100} символов — это провал задачи, а не старательность.`,
     '— Одна-две самые сильные детали, а не весь опыт подряд. Остальное есть в резюме.',
@@ -116,7 +117,7 @@ export function batchPrompt(
     '',
     `Напиши ${targets.length} писем — по одному на каждую вакансию ниже.`,
     `Каждое письмо — 3-5 предложений, около ${Math.round(cfg.letter.maxChars * 0.6)} символов,`,
-    `и ни при каких условиях не длиннее ${cfg.letter.maxChars}.`,
+    `не короче ${cfg.letter.minChars} и ни при каких условиях не длиннее ${cfg.letter.maxChars}.`,
     '',
     'Формат ответа — строго такой, без JSON и без пояснений:',
     '',

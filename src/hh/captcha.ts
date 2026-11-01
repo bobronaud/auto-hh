@@ -98,7 +98,7 @@ export async function solveCaptcha(page: Page, cfg: Config, opts: SolveOptions =
       raw = res.text
     } catch (e) {
       // Not a bad reading but a broken channel: further attempts would fail the same way.
-      log.error(`claude -p недоступен: ${(e as Error).message} — капчу вводит человек`)
+      log.error(`codex exec недоступен: ${(e as Error).message} — капчу вводит человек`)
       return false
     }
 

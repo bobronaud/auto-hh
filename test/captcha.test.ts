@@ -41,7 +41,7 @@ function cfg(attempts = 3): Config {
   )
   return {
     ...base,
-    llm: { ...base.llm, provider: 'claude-cli' },
+    llm: { ...base.llm, provider: 'codex-cli' },
     browser: { ...base.browser, captchaAutoAttempts: attempts },
   }
 }
@@ -100,9 +100,9 @@ test('second attempt succeeds after a wrong one', async () => {
   assert.equal(provider.calls.length, 2)
 })
 
-test('claude -p unavailable: one call, nothing typed, captcha left open', async () => {
+test('codex exec unavailable: one call, nothing typed, captcha left open', async () => {
   await page.setContent(fixture)
-  const provider = fakeProvider([new Error('claude CLI failed: not logged in')])
+  const provider = fakeProvider([new Error('Codex CLI failed: not logged in')])
   assert.equal(await solveCaptcha(page, cfg(3), { provider, shotDir }), false)
   assert.equal(provider.calls.length, 1)
   assert.equal(await page.evaluate(() => (window as unknown as { submits: number }).submits), 0)

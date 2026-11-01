@@ -9,6 +9,7 @@
   "scripts": {
     "login": "tsx src/cli.ts login",
     "doctor": "tsx src/cli.ts doctor",
+    "llm:check": "node --import tsx src/llm/check.ts",
     "selectors:probe": "tsx src/cli.ts probe",
     "server": "tsx watch src/server/index.ts",
     "ui": "vite --config ui/vite.config.ts",

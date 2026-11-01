@@ -155,8 +155,10 @@
     }
   },
   "llm": {
-    "provider": "claude-cli",
-    "model": "sonnet",
+    "provider": "codex-cli",
+    "model": "gpt-6-luna",
+    "imageModel": "gpt-6.1-terra",
+    "reasoningEffort": "medium",
     "apiKeyEnv": "LLM_API_KEY",
     "maxConcurrency": 1,
     "timeoutSec": 120

@@ -78,7 +78,7 @@ export async function scrapePage(page: Page): Promise<{ cards: ScrapedCard[]; do
   // tsx compiles with esbuild's keepNames, which rewrites such declarations into a
   // `__name(...)` helper that does not exist in the page context — the callback is
   // serialised and evaluated in the browser, where that helper was never defined.
-  // Inline expressions only; see CLAUDE.md.
+  // Inline expressions only; see AGENTS.md.
   const raw = await page.locator(sel.card).evaluateAll((els, s) => {
     return els.map((el) => {
       const link = el.querySelector(s.title) as HTMLAnchorElement | null

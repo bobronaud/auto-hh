@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_IMAGE_MODEL, migrateLegacyLlm } from './llm.js'
 
 /**
  * Search params mirror hh's own search URL. Names follow the OpenAPI spec
@@ -132,38 +133,24 @@ const letterSchema = z.object({
    * without claiming anything the candidate cannot back up.
    */
   extraSkills: z.string().default(''),
-  /**
-   * Letters generated per LLM call.
-   *
-   * This matters far more than the model choice. Every claude-cli invocation re-sends
-   * Claude Code's system prompt, so a batch of 10 measured 24x cheaper per letter
-   * than one-at-a-time ($0.0017 vs $0.041). Too large a batch risks a truncated
-   * response and dilutes per-vacancy attention; 10 is the measured sweet spot.
-   */
+  /** Batch letters to share resume/prompt context and process start-up overhead. */
   batchSize: z.number().int().min(1).max(25).default(10),
 })
 
-const llmSchema = z.object({
-  /**
-   * 'claude-cli' shells out to the locally installed, already-authenticated `claude`
-   * binary. No API key, no separate billing — it draws on the Claude Code
-   * subscription. Claude Code's own prompt, tools and MCP servers are switched off
-   * per call (see claudeCli.ts), so the overhead is process start-up, not tokens.
-   *
-   * 'anthropic' calls the API directly and needs a key from console.anthropic.com —
-   * cheaper and faster per letter, but separately billed.
-   */
-  provider: z.enum(['none', 'claude-cli', 'anthropic', 'openrouter', 'ollama']).default('none'),
-  /** For claude-cli: 'sonnet' | 'opus' | 'haiku' or a full model id. */
+const llmSchema = z.preprocess(migrateLegacyLlm, z.object({
+  /** codex-cli uses the locally authenticated CLI; HTTP providers remain unimplemented. */
+  provider: z.enum(['none', 'codex-cli', 'anthropic', 'openrouter', 'ollama']).default('none'),
+  /** Empty uses the application's economical text model, not the user's CLI default. */
   model: z.string().default(''),
-  /** Read from env, never stored in config.json. Unused by claude-cli. */
+  imageModel: z.string().min(1).default(DEFAULT_IMAGE_MODEL),
+  reasoningEffort: z.enum(['low', 'medium', 'high']).default('medium'),
+  /** Reserved for HTTP providers. Codex CLI uses its own ChatGPT authentication. */
   apiKeyEnv: z.string().default('LLM_API_KEY'),
   baseUrl: z.string().url().optional(),
-  /** claude-cli spawns a process per call — keep this low. */
+  /** Each completion starts a CLI process. */
   maxConcurrency: z.number().int().min(1).max(8).default(2),
-  /** Seconds before a single generation is abandoned. */
   timeoutSec: z.number().int().min(10).max(600).default(120),
-})
+}))
 
 const browserSchema = z.object({
   /** headless is opt-in, never the default (§2.2). DDoS-Guard is harsher on it. */

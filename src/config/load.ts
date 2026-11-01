@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { configSchema, type Config } from './schema.js'
+import { logger } from '../core/logger.js'
 import { CONFIG_PATH, CONFIG_EXAMPLE_PATH } from '../core/paths.js'
 
 let cached: Config | null = null
@@ -12,7 +13,11 @@ export function loadConfig(force = false): Config {
     throw new Error(`No config found. Copy config.example.json to config.json.`)
   }
 
-  const parsed = configSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')))
+  const raw = JSON.parse(readFileSync(path, 'utf8'))
+  if (raw?.llm?.provider === 'claude-cli') {
+    logger('config').warn('llm.provider=claude-cli устарел: используется Codex CLI. Обновите llm.provider и llm.model в config.json.')
+  }
+  const parsed = configSchema.safeParse(raw)
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)

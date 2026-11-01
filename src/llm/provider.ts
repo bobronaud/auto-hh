@@ -1,11 +1,4 @@
-/**
- * Provider-agnostic LLM interface (RESEARCH §4.1).
- *
- * The concrete backend is deliberately undecided: scoring and letters are stages
- * 4-5, and the pipeline has to be runnable before that call is made. `none` is a
- * real, working provider — it refuses loudly instead of silently returning junk,
- * so a misconfigured run fails at the boundary rather than sending a blank letter.
- */
+/** Provider-agnostic completions for letters, forms, chats and images. */
 
 export interface CompletionRequest {
   system?: string
@@ -40,7 +33,7 @@ export class LlmNotConfiguredError extends Error {
   constructor() {
     super(
       'No LLM provider configured. Set llm.provider in config.json to one of: ' +
-        'anthropic | openrouter | ollama (and export the key named by llm.apiKeyEnv).',
+        'codex-cli (run codex login first). HTTP providers are not implemented.',
     )
     this.name = 'LlmNotConfiguredError'
   }
@@ -55,23 +48,22 @@ class NoneProvider implements LlmProvider {
 }
 
 import type { Config } from '../config/schema.js'
-import { ClaudeCliProvider } from './claudeCli.js'
+import { CodexCliProvider } from './codexCli.js'
 
 export function createProvider(cfg: Config): LlmProvider {
   switch (cfg.llm.provider) {
     case 'none':
       return new NoneProvider()
 
-    case 'claude-cli':
-      return new ClaudeCliProvider(cfg)
-    // Stages 4-5 land here. Each is a thin fetch() against the provider's HTTP API;
-    // nothing else in the codebase knows which one is in use.
+    case 'codex-cli':
+      return new CodexCliProvider(cfg)
+    // Reserved config values; the local CLI is the implemented backend.
     case 'anthropic':
     case 'openrouter':
     case 'ollama':
       throw new Error(
-        `Provider "${cfg.llm.provider}" is not implemented yet (stages 4-5). ` +
-          'Keep llm.provider = "none" until then.',
+        `Provider "${cfg.llm.provider}" is not implemented. ` +
+          'Use llm.provider = "codex-cli" for generation.',
       )
     default: {
       const never: never = cfg.llm.provider

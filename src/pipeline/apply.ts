@@ -61,9 +61,8 @@ export async function runApplications(cfg: Config, limit?: number): Promise<RunR
   // the application, and a separate step that has to be remembered first is a step
   // that gets forgotten — with the application going out bare.
   //
-  // Still a batch rather than a letter per vacancy inside the loop: every claude-cli
-  // call re-sends Claude Code's system prompt, which measured 24x per letter. The hh
-  // traffic is unchanged either way — the vacancy pages are read once for their
+  // Batch letters to share prompt context and CLI start-up overhead. The hh
+  // traffic is unchanged — the vacancy pages are read once for their
   // descriptions, exactly as the standalone letters run read them.
   if (cfg.letter.mode === 'llm') {
     const needLetters = candidates.filter((v) => !repo.latestLetter(v.id))

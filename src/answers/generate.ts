@@ -16,8 +16,7 @@ export type FormAnswers =
 /**
  * Answer a whole form in one model call.
  *
- * One call per form, not per question: every claude-cli invocation re-sends Claude
- * Code's system prompt, and the questions of one form share all their context anyway.
+ * One call per form, not per question: all questions share the same resume and rules.
  * Forms cannot be batched across vacancies the way letters are — a form only exists
  * once "Откликнуться" has been pressed.
  *

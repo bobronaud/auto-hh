@@ -37,9 +37,8 @@ export function readResumeText(resume: ResumeConfig): string {
 /**
  * Generate letters for a batch of vacancies in a single LLM call.
  *
- * Batching is the whole point: measured against the claude-cli provider, ten letters
- * in one call cost $0.0017 each versus $0.041 one at a time, because every invocation
- * re-sends Claude Code's system prompt regardless of payload.
+ * Batching shares resume/system context and CLI start-up overhead across letters.
+ * Historical Claude token/cost measurements do not predict Codex subscription usage.
  */
 export async function generateLetters(
   targets: readonly LetterTarget[],

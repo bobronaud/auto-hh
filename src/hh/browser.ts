@@ -33,7 +33,7 @@ const STEALTH_INIT = `
  * for evaluate(), `__name` is not defined there and the call throws mid-run.
  *
  * The real fix is to keep evaluate() callbacks free of named function bindings — and
- * that is the rule (CLAUDE.md). This identity shim only stops a future slip from
+ * that is the rule (AGENTS.md). This identity shim only stops a future slip from
  * killing a run that is already halfway through applying.
  */
 const ESBUILD_NAME_SHIM = `
@@ -187,7 +187,7 @@ async function anyVisible(page: Page, candidates: readonly string[]): Promise<st
  *
  * First the picture is read through the LLM and typed in (solveCaptcha, owner's call
  * 05.10 — invariant 2 used to forbid it). The read text goes to the log. If that fails
- * — attempts ran out, or `claude -p` cannot be called at all — the captcha stays open
+ * — attempts ran out, or `codex exec` cannot be called at all — the captcha stays open
  * and the human gets manualActionTimeoutMs to type it, exactly as before: the browser
  * is headful, we watch the DOM until it is gone and resume the same application.
  *
