@@ -22,7 +22,7 @@ export const DROP_LABEL: Record<DropReason, string> = {
   has_test: 'тестовое задание',
   company_blacklist: 'компания в чёрном списке',
   title_blacklist: 'стоп-слово в названии',
-  forbidden_keyword: 'запрещённое слово Runforge',
+  forbidden_keyword: 'стоп-слово из настроек поиска',
   not_frontend: 'не фронтенд',
 }
 
@@ -38,8 +38,12 @@ export function filterCard(
   cfg: Config,
   appliedIds: ReadonlySet<string>,
 ): FilterVerdict {
-  // Owner's mandatory collection exclusion, independent of configurable lists.
-  if ([card.title, card.company, card.snippet, card.searchText].some((text) => lc(text).includes('runforge'))) {
+  // Enforce search exclusions locally too, before saving a card to the queue.
+  if (cfg.search.excludedText.some((keyword) => {
+    const needle = lc(keyword).trim()
+    return needle.length > 0 &&
+      [card.title, card.company, card.snippet, card.searchText].some((text) => lc(text).includes(needle))
+  })) {
     return { keep: false, reason: 'forbidden_keyword' }
   }
 

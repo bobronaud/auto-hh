@@ -275,6 +275,7 @@ const DROP_LABEL: Record<string, string> = {
   has_test: 'тестовое задание',
   company_blacklist: 'компания в чёрном списке',
   title_blacklist: 'стоп-слово в названии',
+  forbidden_keyword: 'стоп-слово из настроек поиска',
   not_frontend: 'не фронтенд',
 };
 

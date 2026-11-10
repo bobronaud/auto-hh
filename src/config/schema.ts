@@ -17,7 +17,7 @@ const searchSchema = z.object({
    */
   area: z.array(z.string()).default([]),
   experience: z.enum(['noExperience', 'between1And3', 'between3And6', 'moreThan6']).optional(),
-  /** Words that disqualify a vacancy outright; passed to hh as excluded_text. */
+  /** Excluded substrings: passed to hh as excluded_text and checked locally on cards. */
   excludedText: z.array(z.string()).default([]),
   /** hh work_format: REMOTE | HYBRID | ON_SITE | FIELD_WORK */
   workFormat: z.array(z.enum(['REMOTE', 'HYBRID', 'ON_SITE', 'FIELD_WORK'])).default([]),

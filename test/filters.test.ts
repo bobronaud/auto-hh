@@ -17,15 +17,16 @@ const card: ScrapedCard = {
   alreadyAppliedOnHh: false,
 }
 
-test('Runforge is excluded from collection in every available text field regardless of case or config', () => {
+test('configured search exclusions are enforced in every available text field regardless of case', () => {
   const cards: ScrapedCard[] = [
-    { ...card, title: 'Frontend Developer (Runforge)' },
-    { ...card, company: 'ООО RUNFORGE' },
-    { ...card, snippet: 'Команда RunForge ищет разработчика' },
-    { ...card, searchText: 'Frontend React Developer — продукт runforge.io' },
+    { ...card, title: 'Frontend Developer (BlockedExample)' },
+    { ...card, company: 'ООО BLOCKEDEXAMPLE' },
+    { ...card, snippet: 'Команда BlockedExample ищет разработчика' },
+    { ...card, searchText: 'Frontend React Developer — продукт blockedexample.test' },
   ]
   const result = applyFilters(cards, {
     ...cfg,
+    search: { ...cfg.search, excludedText: [' BlockedExample '] },
     filters: { skipWithTest: false, companyBlacklist: [], titleBlacklist: [] },
   }, new Set())
   assert.deepEqual(result.kept, [])
@@ -33,8 +34,18 @@ test('Runforge is excluded from collection in every available text field regardl
   assert.deepEqual(result.counts, { forbidden_keyword: cards.length })
 })
 
-test('collection keeps ordinary frontend vacancies when Runforge is absent', () => {
+test('collection keeps ordinary frontend vacancies when exclusions are absent', () => {
   const result = applyFilters([card, { ...card, company: null, searchText: '' }], cfg, new Set())
   assert.equal(result.kept.length, 2)
+  assert.deepEqual(result.dropped, [])
+})
+
+test('empty exclusions are ignored and removing an exclusion allows the vacancy again', () => {
+  const cards = [{ ...card, company: 'BlockedExample' }]
+  const result = applyFilters(cards, {
+    ...cfg,
+    search: { ...cfg.search, excludedText: ['', '   '] },
+  }, new Set())
+  assert.deepEqual(result.kept, cards)
   assert.deepEqual(result.dropped, [])
 })
