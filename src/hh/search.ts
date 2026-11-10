@@ -17,6 +17,8 @@ const log = logger('search')
  */
 
 export interface ScrapedCard extends VacancyInput {
+  /** Full results-card text, including mentions outside the title and company. */
+  searchText?: string
   /** Apply straight from the results list — saves opening the vacancy page. */
   canApplyFromList: boolean
   /** hh itself says we already answered this one. Trust it over our own history. */
@@ -91,6 +93,7 @@ export async function scrapePage(page: Page): Promise<{ cards: ScrapedCard[]; do
         company: (company?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
         area: (area?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
         salary: (salary?.textContent ?? '').replace(/\s+/g, ' ').trim() || null,
+        searchText: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
         hasTest: el.querySelector(s.test) !== null,
         canApplyFromList: el.querySelector(s.apply) !== null,
         // hh words this differently depending on what happened to the application:
@@ -115,6 +118,7 @@ export async function scrapePage(page: Page): Promise<{ cards: ScrapedCard[]; do
       url: r.url.split('?')[0]!,
       title: r.title,
       company: r.company,
+      searchText: r.searchText,
       area: r.area,
       salaryFrom: salary.from,
       salaryTo: salary.to,

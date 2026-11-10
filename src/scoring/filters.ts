@@ -14,6 +14,7 @@ export type DropReason =
   | 'has_test'
   | 'company_blacklist'
   | 'title_blacklist'
+  | 'forbidden_keyword'
   | 'not_frontend'
 
 export const DROP_LABEL: Record<DropReason, string> = {
@@ -21,6 +22,7 @@ export const DROP_LABEL: Record<DropReason, string> = {
   has_test: 'тестовое задание',
   company_blacklist: 'компания в чёрном списке',
   title_blacklist: 'стоп-слово в названии',
+  forbidden_keyword: 'запрещённое слово Runforge',
   not_frontend: 'не фронтенд',
 }
 
@@ -36,6 +38,11 @@ export function filterCard(
   cfg: Config,
   appliedIds: ReadonlySet<string>,
 ): FilterVerdict {
+  // Owner's mandatory collection exclusion, independent of configurable lists.
+  if ([card.title, card.company, card.snippet, card.searchText].some((text) => lc(text).includes('runforge'))) {
+    return { keep: false, reason: 'forbidden_keyword' }
+  }
+
   // Our own history, plus what hh itself shows in the card — hh also knows about
   // applications made by hand or from the phone, which our database never saw.
   if (appliedIds.has(card.hhId) || card.alreadyAppliedOnHh) {
