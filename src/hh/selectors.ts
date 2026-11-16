@@ -188,8 +188,11 @@ export const selectors = {
       'text=/Вы откликнулись/i',
     ],
     hasTestBadge: ['[data-qa="vacancy-response-link-top-with-test"]', 'text=/с тестовым заданием/i'],
-    /** «Опыт работы: 1–3 года». Подтверждено разведкой форм (05.10). */
-    experience: ['[data-qa="vacancy-experience"]'],
+    /** С 17.11 опыт бывает в общей строке условий без data-qa. Описание исключено. */
+    experience: [
+      '[data-qa="vacancy-experience"]',
+      'main p:not([data-qa="vacancy-description"] *):text-matches("Опыт( работы)?[ :]*(не требуется|[0-9]|более)|Без опыта", "i")',
+    ],
   },
 
   /**

@@ -6,6 +6,8 @@ import { collectAlarms, SuspectStreak, SUSPECT_STREAK_LIMIT } from '../src/pipel
 import { judgeSearch, judgeThread, judgeForm, judgeChatList } from '../src/pipeline/selfcheck.js'
 import { readThread } from '../src/hh/chat.js'
 import { readForm } from '../src/hh/responseForm.js'
+import { selectors, firstMatch } from '../src/hh/selectors.js'
+import { experienceBand } from '../src/answers/salary.js'
 import type { ApplyOutcome } from '../src/hh/apply.js'
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}.html`, import.meta.url), 'utf8')
@@ -63,6 +65,22 @@ test('apply: an ordinary outcome resets the streak', () => {
 })
 
 // ------------------------------------------------------------- verdicts
+
+test('vacancy experience: old markup and the combined conditions line, excluding description', async () => {
+  for (const [html, band] of [
+    ['<span data-qa="vacancy-experience">3–6 лет</span>', '3-6'],
+    ['<p>Полная занятость · Опыт более 6 лет · График 5/2 · Рабочие часы 8</p>', '6+'],
+    ['<p>Полная занятость · Опыт 1–3 года · График 5/2</p>', '1-3'],
+    ['<p>Полная занятость · Без опыта · График 5/2</p>', 'none'],
+  ] as const) {
+    await page.setContent(`<main><div data-qa="vacancy-description"><p>Опыт 3–6 лет будет плюсом</p></div>${html}</main>`)
+    const sel = await firstMatch(page, selectors.vacancy.experience)
+    assert.ok(sel)
+    assert.equal(experienceBand(await page.locator(sel).first().innerText()), band)
+  }
+  await page.setContent('<main><div data-qa="vacancy-description"><p>Опыт 3–6 лет будет плюсом</p></div></main>')
+  assert.equal(await firstMatch(page, selectors.vacancy.experience), null)
+})
 
 test('search verdict', () => {
   const card = { hhId: '1', title: 'Frontend', company: 'ООО' }
