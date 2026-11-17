@@ -6,7 +6,7 @@ import { collectAlarms, SuspectStreak, SUSPECT_STREAK_LIMIT } from '../src/pipel
 import { judgeSearch, judgeThread, judgeForm, judgeChatList } from '../src/pipeline/selfcheck.js'
 import { readThread } from '../src/hh/chat.js'
 import { readForm } from '../src/hh/responseForm.js'
-import { selectors, firstMatch } from '../src/hh/selectors.js'
+import { selectors, firstMatch, firstVisibleMatch } from '../src/hh/selectors.js'
 import { experienceBand } from '../src/answers/salary.js'
 import type { ApplyOutcome } from '../src/hh/apply.js'
 
@@ -19,6 +19,25 @@ before(async () => {
   page = await browser.newPage()
 })
 after(async () => browser.close())
+
+test('apply: success and already-applied markers tolerate hh non-breaking spaces', async () => {
+  // Minimal fragment of the 17.11 response page, without personal data.
+  for (const space of [' ', '\u00a0', '\u202f', '\n']) {
+    await page.setContent(`<main><span data-qa="cell-text-content">Вы${space}откликнулись</span></main>`)
+    for (const candidates of [selectors.apply.success, selectors.vacancy.alreadyApplied, selectors.search.cardAlreadyApplied, selectors.apply.alreadyAppliedNotice]) {
+      assert.ok(await firstVisibleMatch(page, candidates), `missed confirmation with ${JSON.stringify(space)}`)
+    }
+    for (const text of [`Отклик${space}отправлен`, `Резюме${space}доставлено`]) {
+      await page.setContent(`<main><span>${text}</span></main>`)
+      assert.ok(await firstVisibleMatch(page, selectors.apply.success), text)
+    }
+  }
+})
+
+test('apply: a hidden confirmation or an unsubmitted form does not prove success', async () => {
+  await page.setContent('<main><span hidden>Вы&nbsp;откликнулись</span><button type="submit">Откликнуться</button></main>')
+  assert.equal(await firstVisibleMatch(page, selectors.apply.success), null)
+})
 
 // ------------------------------------------------------------- tripwires
 
